@@ -56,3 +56,4 @@ Each module owns its protos — no shared proto module. Tests validate correctne
 - Deserialization (JSON -> protobuf)
 - Streaming / Appendable output
 - Proto2 support
+

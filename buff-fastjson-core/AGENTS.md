@@ -51,3 +51,4 @@ io.suboptimal.buffjson.internal/
 
 - `com.google.protobuf:protobuf-java` — Message, Descriptor, FieldDescriptor APIs
 - `com.alibaba.fastjson2:fastjson2` — JSONWriter, ObjectWriterModule, ObjectWriter
+

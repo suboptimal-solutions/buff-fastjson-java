@@ -6,10 +6,10 @@ Fast JSON serialization for Protocol Buffer messages in Java, compliant with the
 
 ~4x faster than `JsonFormat.printer().print()` from protobuf-java-util:
 
-| Message type | BuffJSON (ops/s) | JsonFormat (ops/s) | Speedup |
-|---|---|---|---|
-| SimpleMessage (6 fields) | ~5.8M | ~1.5M | **~4x** |
-| ComplexMessage (nested, maps, repeated) | ~666K | ~158K | **~4.2x** |
+|              Message type               | BuffJSON (ops/s) | JsonFormat (ops/s) |  Speedup  |
+|-----------------------------------------|------------------|--------------------|-----------|
+| SimpleMessage (6 fields)                | ~5.8M            | ~1.5M              | **~4x**   |
+| ComplexMessage (nested, maps, repeated) | ~666K            | ~158K              | **~4.2x** |
 
 Benchmarked on JDK 21 (Corretto) with JMH (2 forks, 5 warmup + 5 measurement iterations).
 
@@ -37,27 +37,27 @@ The output matches `JsonFormat.printer().omittingInsignificantWhitespace().print
 
 ## Proto3 JSON Spec Compliance
 
-| Feature | Status |
-|---|---|
+|                                                                  Feature                                                                  |  Status   |
+|-------------------------------------------------------------------------------------------------------------------------------------------|-----------|
 | All scalar types (int32, int64, uint32, uint64, sint32, sint64, fixed32, fixed64, sfixed32, sfixed64, float, double, bool, string, bytes) | Supported |
-| Unsigned integer formatting (uint32, uint64) | Supported |
-| int64/uint64 as quoted strings | Supported |
-| NaN, Infinity, -Infinity as quoted strings | Supported |
-| Nested messages | Supported |
-| Repeated fields | Supported |
-| Map fields (all key types: string, int, bool, etc.) | Supported |
-| Oneof fields | Supported |
-| Enums as string names | Supported |
-| Proto3 default value omission | Supported |
-| Proto3 explicit presence (`optional` keyword) | Supported |
-| Custom `json_name` | Supported |
-| `google.protobuf.Timestamp` (RFC 3339) | Supported |
-| `google.protobuf.Duration` | Supported |
-| `google.protobuf.FieldMask` (camelCase paths) | Supported |
-| `google.protobuf.Struct` / `Value` / `ListValue` | Supported |
-| All 9 wrapper types (`Int32Value`, `StringValue`, etc.) | Supported |
-| `google.protobuf.Any` | Not yet |
-| Deserialization (JSON to protobuf) | Not yet |
+| Unsigned integer formatting (uint32, uint64)                                                                                              | Supported |
+| int64/uint64 as quoted strings                                                                                                            | Supported |
+| NaN, Infinity, -Infinity as quoted strings                                                                                                | Supported |
+| Nested messages                                                                                                                           | Supported |
+| Repeated fields                                                                                                                           | Supported |
+| Map fields (all key types: string, int, bool, etc.)                                                                                       | Supported |
+| Oneof fields                                                                                                                              | Supported |
+| Enums as string names                                                                                                                     | Supported |
+| Proto3 default value omission                                                                                                             | Supported |
+| Proto3 explicit presence (`optional` keyword)                                                                                             | Supported |
+| Custom `json_name`                                                                                                                        | Supported |
+| `google.protobuf.Timestamp` (RFC 3339)                                                                                                    | Supported |
+| `google.protobuf.Duration`                                                                                                                | Supported |
+| `google.protobuf.FieldMask` (camelCase paths)                                                                                             | Supported |
+| `google.protobuf.Struct` / `Value` / `ListValue`                                                                                          | Supported |
+| All 9 wrapper types (`Int32Value`, `StringValue`, etc.)                                                                                   | Supported |
+| `google.protobuf.Any`                                                                                                                     | Not yet   |
+| Deserialization (JSON to protobuf)                                                                                                        | Not yet   |
 
 ## Building
 
@@ -102,10 +102,10 @@ buff-fastjson-java/
 
 ## Dependencies
 
-| Dependency | Version | Purpose |
-|---|---|---|
-| `com.google.protobuf:protobuf-java` | 4.34.1 | Protobuf runtime (Message, Descriptor) |
-| `com.alibaba.fastjson2:fastjson2` | 2.0.61 | JSON writing engine |
+|             Dependency              | Version |                Purpose                 |
+|-------------------------------------|---------|----------------------------------------|
+| `com.google.protobuf:protobuf-java` | 4.34.1  | Protobuf runtime (Message, Descriptor) |
+| `com.alibaba.fastjson2:fastjson2`   | 2.0.61  | JSON writing engine                    |
 
 ## License
 

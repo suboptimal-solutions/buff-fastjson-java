@@ -27,6 +27,7 @@ Conformance tests verifying that `BuffJSON.encode()` produces output identical t
 ## Test Pattern
 
 Every test follows:
+
 ```java
 String expected = JsonFormat.printer().omittingInsignificantWhitespace().print(message);
 String actual = BuffJSON.encode(message);
@@ -44,3 +45,4 @@ assertEquals(expected, actual);
 - `buff-fastjson-core` — the library under test
 - `protobuf-java-util` — reference `JsonFormat.printer()` for comparison
 - `junit-jupiter` — test framework
+
