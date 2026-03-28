@@ -10,13 +10,15 @@ No dependency on specific `.proto` definitions — works with any `com.google.pr
 ```
 io.suboptimal.buffjson/
   BuffJSON.java                    # Static entry point + factory: BuffJSON.encode(), BuffJSON.encoder()
-  Encoder.java                     # Immutable, thread-safe encoder with optional TypeRegistry
+  Encoder.java                     # Immutable, thread-safe encoder with optional TypeRegistry + useGeneratedEncoders
+  GeneratedEncoder.java            # Interface for protoc-plugin-generated encoders (ServiceLoader discovered)
 
 io.suboptimal.buffjson.internal/
   ProtobufWriterModule.java        # fastjson2 ObjectWriterModule (intercepts Message types)
-  ProtobufMessageWriter.java       # Main serialization loop (iterates schema fields)
-  MessageSchema.java               # Cached field metadata per Descriptor
-  FieldWriter.java                 # Type-dispatched value writing (scalars, maps, repeated)
+  ProtobufMessageWriter.java       # Main serialization — checks GeneratedEncoderRegistry, falls back to generic
+  GeneratedEncoderRegistry.java    # ConcurrentHashMap<String, GeneratedEncoder> populated via ServiceLoader
+  MessageSchema.java               # Cached field metadata per Descriptor (generic path)
+  FieldWriter.java                 # Type-dispatched value writing (scalars, maps, repeated) (generic path)
   WellKnownTypes.java              # Special handling for 16 well-known protobuf types
 ```
 
@@ -24,10 +26,14 @@ io.suboptimal.buffjson.internal/
 
 1. `BuffJSON.encode()` → `DEFAULT_ENCODER.encode()` → `JSON.toJSONString(message)`
 2. fastjson2 calls `ProtobufWriterModule.getObjectWriter()` → returns `ProtobufMessageWriter`
-3. `ProtobufMessageWriter.writeMessage()`:
-   - `startObject()` + `writeFields()` + `endObject()`
-   - `writeFields()` iterates cached `FieldInfo[]` array (no `getAllFields()` TreeMap)
-   - For each field: checks presence/default, then calls `FieldWriter.writeValue()`
+3. `ProtobufMessageWriter.writeMessage()` → `writeFields()`:
+   - First checks `GeneratedEncoderRegistry.get(descriptor)`:
+     - Skipped if `SKIP_GENERATED_ENCODERS` ThreadLocal is set (for benchmarking)
+     - Skipped for `DynamicMessage` instances (would fail cast to concrete type)
+     - If found: delegates to `GeneratedEncoder.writeFields()` → **codegen path** (done)
+   - If no generated encoder: **generic path**:
+     - Iterates cached `FieldInfo[]` array (no `getAllFields()` TreeMap)
+     - For each field: checks presence/default, then calls `FieldWriter.writeValue()`
 4. `FieldWriter.writeValue()` dispatches on `JavaType` (INT, LONG, FLOAT, ..., MESSAGE)
 5. For MESSAGE fields: checks `WellKnownTypes.isWellKnownType()` first, then recurses
 

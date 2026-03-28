@@ -3,23 +3,35 @@
 ## Project Overview
 
 Fast protobuf-to-JSON serializer for Java using fastjson2 as the JSON writing engine.
-~4x faster than `JsonFormat.printer()`. Serialization only (no deserialization yet).
-Proto3 JSON spec compliant, including all 16 well-known types.
+Up to ~10x faster than `JsonFormat.printer()` with the optional protoc plugin (~4-5x without).
+Serialization only (no deserialization yet). Proto3 JSON spec compliant, including all 16 well-known types.
 
 ## Architecture
 
-```
-BuffJSON.encode(message)              # convenience static method
-  -> DEFAULT_ENCODER.encode(message)  # delegates to Encoder
+Two encoding paths — codegen (fast) with fallback to generic (reflection):
 
-Encoder.encode(message)               # configurable (TypeRegistry for Any)
-  -> sets ThreadLocal TypeRegistry (if configured)
-  -> JSON.toJSONString(message)       # fastjson2 entry point
-    -> ProtobufWriterModule.getObjectWriter()  # intercepts Message types
-      -> ProtobufMessageWriter.write()         # iterates fields via cached schema
-        -> FieldWriter.writeValue()            # type-dispatched field writing
-        -> WellKnownTypes.write()              # special types (Timestamp, Any, wrappers, etc.)
 ```
+BuffJSON.encode(message)
+  -> Encoder.encode(message)
+    -> sets ThreadLocal TypeRegistry + SKIP_GENERATED_ENCODERS (if configured)
+    -> JSON.toJSONString(message)       # fastjson2 entry point
+      -> ProtobufWriterModule.getObjectWriter()  # intercepts Message types
+        -> ProtobufMessageWriter.writeFields()
+          -> GeneratedEncoderRegistry.get()    # check for codegen encoder (ServiceLoader)
+             -> if found: GeneratedEncoder.writeFields()   # direct typed accessors, no boxing
+             -> if not:   generic path (MessageSchema + FieldWriter)  # reflection-style getField()
+```
+
+**Codegen path** (optional, ~2x faster): protoc plugin generates `*JsonEncoder` per message.
+Each encoder calls typed getters directly (`msg.getId()` → `int`), eliminating:
+- `message.getField(fd)` reflection + boxing
+- `switch (fd.getJavaType())` runtime dispatch
+- `ConcurrentHashMap.get()` for MessageSchema lookup
+
+**Generic path** (always available): iterates cached `FieldInfo[]`, dispatches by `JavaType`.
+Still ~4-5x faster than `JsonFormat` due to schema caching and fastjson2 buffer reuse.
+
+**Fallback**: `DynamicMessage` instances (e.g., from Any unpacking) always use the generic path.
 
 fastjson2 handles: buffer pooling, number formatting, string escaping, UTF-8 encoding.
 We handle: protobuf field extraction, proto3 JSON spec compliance, well-known types.
@@ -36,20 +48,29 @@ Encoder encoder = BuffJSON.encoder()
         .add(MyMessage.getDescriptor())
         .build());
 String json = encoder.encode(message);
+
+// Force generic path (skip generated encoders, for benchmarking/testing)
+Encoder genericEncoder = BuffJSON.encoder().withGeneratedEncoders(false);
+String json = genericEncoder.encode(message);
 ```
 
 - `BuffJSON` — static entry point + factory for `Encoder`
-- `Encoder` — immutable, thread-safe, cacheable. Holds optional `TypeRegistry`.
+- `Encoder` — immutable, thread-safe, cacheable. Holds optional `TypeRegistry` and `useGeneratedEncoders` flag.
+- `GeneratedEncoder<T>` — interface implemented by protoc-plugin-generated encoders. Discovered via `ServiceLoader`.
 
 ## Key Design Decisions
 
 - **fastjson2 `ObjectWriterModule`**: Chose the public plugin API over depending on fastjson2 internals.
 - **`MessageSchema` caching**: One-time cost per Descriptor. Avoids `getAllFields()` TreeMap allocation.
-- **`message.getField(descriptor)`** for field access (generic, involves boxing for primitives).
+- **Pre-computed `char[] nameWithColon`**: Field names pre-encoded as `"name":` for `writeNameRaw(char[])`. Must use `char[]` (not `byte[]`) because `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`.
+- **`message.getField(descriptor)`** for field access in generic path (involves boxing for primitives).
 - **`Float.floatToRawIntBits() == 0`** for default value checks (correctly handles `-0.0`).
 - **`Long.toUnsignedString()`** for uint64, **`Integer.toUnsignedLong()`** for uint32.
-- **ThreadLocal `TypeRegistry`** for Any support — set/cleared per `Encoder.encode()` call.
+- **ThreadLocal `TypeRegistry`** and **`SKIP_GENERATED_ENCODERS`** for per-encode configuration.
 - **Builder pattern** (`Encoder`) mirrors `JsonFormat.printer()` style, extensible for future options.
+- **`GeneratedEncoderRegistry`** uses `ServiceLoader` — zero-config discovery, no registration needed.
+- **`DynamicMessage` guard**: Generated encoders are skipped for `DynamicMessage` instances (e.g., from Any unpacking) because they'd fail the cast to the concrete message type.
+- **Protoc plugin generates to same package** as protobuf messages. `META-INF/services` file is also generated but needs a `<resources>` POM entry to be copied to `target/classes`.
 
 ## Build Notes
 
@@ -64,11 +85,13 @@ String json = encoder.encode(message);
 
 ## Module Layout
 
-- **buff-fastjson-core** — public API (`BuffJSON`, `Encoder`) + internal serialization (no proto dependency)
-- **buff-fastjson-tests** — 84 conformance tests + own .proto definitions (`conformance_test.proto`)
-- **buff-fastjson-benchmarks** — JMH benchmarks + own .proto definitions (`simple_message.proto`, `complex_message.proto`)
+- **buff-fastjson-core** — public API (`BuffJSON`, `Encoder`, `GeneratedEncoder`) + internal serialization
+- **buff-fastjson-protoc-plugin** — protoc plugin that generates `*JsonEncoder` per message type. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout.
+- **buff-fastjson-tests** — 84 conformance tests (each validates both codegen and generic paths) + own .proto definitions
+- **buff-fastjson-benchmarks** — JMH benchmarks (3-way: codegen vs generic vs JsonFormat) + own .proto definitions
 
-Each module owns its protos. Tests validate correctness, benchmarks validate performance.
+Build order in reactor: core → protoc-plugin → tests → benchmarks.
+Each consumer module (tests, benchmarks) configures the protoc plugin via ascopes `protobuf-maven-plugin` `<jvmPlugin>`.
 
 ## Not Yet Implemented
 

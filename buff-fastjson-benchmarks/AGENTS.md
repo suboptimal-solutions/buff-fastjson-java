@@ -5,7 +5,15 @@
 JMH benchmarks comparing `BuffJSON.encode()` against `JsonFormat.printer().print()`.
 Owns its own .proto definitions (simple_message.proto, complex_message.proto) for benchmark messages.
 
-## Benchmarks
+## Benchmarks — Three-Way Comparison
+
+Each benchmark class has three methods:
+
+- `buffJsonCodegen()` — `BuffJSON.encode()` with generated encoders (codegen path)
+- `buffJson()` — `GENERIC_ENCODER.encode()` with `withGeneratedEncoders(false)` (generic path)
+- `protoJsonFormat()` — `JsonFormat.printer().print()` (baseline)
+
+Files:
 
 - `BenchmarkData.java` — Factory creating deterministic SimpleMessage and ComplexMessage instances
 - `SimpleMessageBenchmark.java` — Throughput comparison on flat 6-field message

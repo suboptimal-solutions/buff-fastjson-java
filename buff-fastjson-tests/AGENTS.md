@@ -28,20 +28,24 @@ Conformance tests verifying that `BuffJSON.encode()` produces output identical t
 
 ## Test Pattern
 
-Most tests:
+Every `assertMatchesReference()` validates **both paths** (codegen and generic):
 
 ```java
 String expected = JsonFormat.printer().omittingInsignificantWhitespace().print(message);
-String actual = BuffJSON.encode(message);
-assertEquals(expected, actual);
+String codegen = BuffJSON.encode(message);                         // uses generated encoders
+String generic = GENERIC_ENCODER.encode(message);                  // withGeneratedEncoders(false)
+assertEquals(expected, codegen, "Codegen mismatch for " + type);
+assertEquals(expected, generic, "Generic mismatch for " + type);
 ```
 
-Any tests use `Encoder` with `TypeRegistry`:
+Any tests use the same dual-path pattern with `Encoder.withTypeRegistry()`.
 
-```java
-Encoder encoder = BuffJSON.encoder().withTypeRegistry(registry);
-String actual = encoder.encode(message);
-```
+## Protoc Plugin Integration
+
+The module configures the `buff-fastjson-protoc-plugin` via `<jvmPlugin>` in the
+protobuf-maven-plugin. Generated `*JsonEncoder` classes and the `META-INF/services` file
+are produced alongside standard protobuf sources. A `<resources>` entry copies the
+`META-INF` directory from generated-sources to `target/classes`.
 
 ## Proto Files
 
