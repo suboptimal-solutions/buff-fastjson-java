@@ -23,6 +23,7 @@
 
     <modules>
         <module>buff-fastjson-core</module>
+        <module>buff-fastjson-tests</module>
         <module>buff-fastjson-benchmarks</module>
     </modules>
 

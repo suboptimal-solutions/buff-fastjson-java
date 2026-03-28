@@ -96,7 +96,8 @@ mvn test
 ```
 buff-fastjson-java/
   buff-fastjson-core/           # Library: BuffJSON.encode() API + internal serialization
-  buff-fastjson-benchmarks/     # Proto definitions, JMH benchmarks, conformance tests
+  buff-fastjson-tests/          # Conformance tests + own .proto definitions
+  buff-fastjson-benchmarks/     # JMH benchmarks + own .proto definitions (uber-jar)
 ```
 
 ## Dependencies

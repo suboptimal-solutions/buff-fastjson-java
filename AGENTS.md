@@ -42,6 +42,14 @@ We handle: protobuf field extraction, proto3 JSON spec compliance, well-known ty
 - **ascopes protobuf-maven-plugin** config: uses `<protoc kind="binary-maven">` (not `<protocVersion>`).
   Version 5.1.0 changed the API.
 
+## Module Layout
+
+- **buff-fastjson-core** — public API + internal serialization (no proto dependency)
+- **buff-fastjson-tests** — conformance tests + own .proto definitions (conformance_test.proto)
+- **buff-fastjson-benchmarks** — JMH benchmarks + own .proto definitions (simple_message.proto, complex_message.proto)
+
+Each module owns its protos — no shared proto module. Tests validate correctness, benchmarks validate performance.
+
 ## Not Yet Implemented
 
 - `google.protobuf.Any` (needs TypeRegistry)
