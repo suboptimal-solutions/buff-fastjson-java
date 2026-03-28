@@ -30,7 +30,18 @@ Inspired by [fastjson2](https://github.com/alibaba/fastjson2) and [buffa](https:
 ```java
 import io.suboptimal.buffjson.BuffJSON;
 
+// Simple usage
 String json = BuffJSON.encode(myProtoMessage);
+
+// With Any type support (requires TypeRegistry)
+import io.suboptimal.buffjson.Encoder;
+import com.google.protobuf.TypeRegistry;
+
+Encoder encoder = BuffJSON.encoder()
+    .withTypeRegistry(TypeRegistry.newBuilder()
+        .add(MyMessage.getDescriptor())
+        .build());
+String json = encoder.encode(messageContainingAny);
 ```
 
 The output matches `JsonFormat.printer().omittingInsignificantWhitespace().print()` exactly.
@@ -56,7 +67,8 @@ The output matches `JsonFormat.printer().omittingInsignificantWhitespace().print
 | `google.protobuf.FieldMask` (camelCase paths)                                                                                             | Supported |
 | `google.protobuf.Struct` / `Value` / `ListValue`                                                                                          | Supported |
 | All 9 wrapper types (`Int32Value`, `StringValue`, etc.)                                                                                   | Supported |
-| `google.protobuf.Any`                                                                                                                     | Not yet   |
+| `google.protobuf.Any` (with TypeRegistry)                                                                                                 | Supported |
+| `google.protobuf.Empty`                                                                                                                   | Supported |
 | Deserialization (JSON to protobuf)                                                                                                        | Not yet   |
 
 ## Building
@@ -89,7 +101,7 @@ java -jar buff-fastjson-benchmarks/target/benchmarks.jar -prof gc
 mvn test
 ```
 
-77 conformance tests compare `BuffJSON.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features.
+84 conformance tests compare `BuffJSON.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features.
 
 ## Project Structure
 

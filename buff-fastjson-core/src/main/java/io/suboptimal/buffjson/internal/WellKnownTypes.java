@@ -26,9 +26,11 @@ import io.suboptimal.buffjson.BuffJSON;
  *
  * <p>
  * These types have special JSON representations defined by the proto3 spec that
- * differ from their standard message serialization. Supports 15 types:
+ * differ from their standard message serialization. Supports 16 types:
  *
  * <ul>
+ * <li><b>Any</b>: {@code {"@type": "type.googleapis.com/...", ...}} with
+ * TypeRegistry resolution
  * <li><b>Timestamp</b>: RFC 3339 string ({@code "2024-01-01T00:00:00Z"})
  * <li><b>Duration</b>: seconds string with 's' suffix ({@code "3600.500s"})
  * <li><b>FieldMask</b>: comma-separated camelCase paths ({@code "foo,barBaz"})

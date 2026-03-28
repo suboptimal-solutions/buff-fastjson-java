@@ -5,10 +5,10 @@
 Conformance tests verifying that `BuffJSON.encode()` produces output identical to
 `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all proto3 JSON features.
 
-## Test Structure
+## Test Structure — 84 tests total
 
-- `BuffJSONTest.java` — 3 integration tests (simple, default, complex messages)
-- `Proto3JsonConformanceTest.java` — 74 tests in 14 nested classes:
+- `BuffJSONTest.java` — 3 smoke tests (scalar, default, complex messages)
+- `Proto3JsonConformanceTest.java` — 81 tests in 16 nested classes:
   - ScalarTypes (13): all types, boundaries, NaN, Infinity, -0.0, unicode, escapes, bytes
   - RepeatedFields (3): all scalar types, empty, single element
   - Enums (3): values, default omission, repeated
@@ -22,11 +22,13 @@ Conformance tests verifying that `BuffJSON.encode()` produces output identical t
   - WrapperTests (11): all 9 types, zero with presence, all combined
   - ExplicitPresence (3): set, set-to-default, not set
   - CustomJsonName (1): json_name annotation
+  - AnyTests (6): regular message, Duration, Timestamp, nested Any, empty, default inner
+  - EmptyTests (1): google.protobuf.Empty serialization
   - EmptyMessages (5): all message types empty
 
 ## Test Pattern
 
-Every test follows:
+Most tests:
 
 ```java
 String expected = JsonFormat.printer().omittingInsignificantWhitespace().print(message);
@@ -34,11 +36,16 @@ String actual = BuffJSON.encode(message);
 assertEquals(expected, actual);
 ```
 
+Any tests use `Encoder` with `TypeRegistry`:
+
+```java
+Encoder encoder = BuffJSON.encoder().withTypeRegistry(registry);
+String actual = encoder.encode(message);
+```
+
 ## Proto Files
 
-- `conformance_test.proto` — comprehensive proto3 test messages: all scalar types, all well-known types
-  (wrappers, Timestamp, Duration, FieldMask, Struct/Value/ListValue), maps with all key types,
-  oneof, recursive messages, explicit presence, custom json_name
+- `conformance_test.proto` — comprehensive proto3 test messages including TestAny, TestEmpty
 
 ## Dependencies
 
