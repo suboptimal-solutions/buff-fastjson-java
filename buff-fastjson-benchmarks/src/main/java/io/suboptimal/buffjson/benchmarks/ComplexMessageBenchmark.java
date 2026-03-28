@@ -7,6 +7,7 @@ import com.google.protobuf.util.JsonFormat;
 import org.openjdk.jmh.annotations.*;
 
 import io.suboptimal.buffjson.BuffJSON;
+import io.suboptimal.buffjson.Encoder;
 import io.suboptimal.buffjson.proto.ComplexMessage;
 
 @BenchmarkMode(Mode.Throughput)
@@ -18,6 +19,7 @@ import io.suboptimal.buffjson.proto.ComplexMessage;
 public class ComplexMessageBenchmark {
 
 	private static final JsonFormat.Printer PROTO_PRINTER = JsonFormat.printer();
+	private static final Encoder GENERIC_ENCODER = BuffJSON.encoder().withGeneratedEncoders(false);
 
 	private ComplexMessage message;
 
@@ -27,8 +29,13 @@ public class ComplexMessageBenchmark {
 	}
 
 	@Benchmark
-	public String buffJson() throws Exception {
+	public String buffJsonCodegen() throws Exception {
 		return BuffJSON.encode(message);
+	}
+
+	@Benchmark
+	public String buffJson() throws Exception {
+		return GENERIC_ENCODER.encode(message);
 	}
 
 	@Benchmark

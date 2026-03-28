@@ -54,6 +54,7 @@ public final class MessageSchema {
 	public static final class FieldInfo {
 		private final FieldDescriptor descriptor;
 		private final String jsonName;
+		private final char[] nameWithColon;
 		private final FieldDescriptor.JavaType javaType;
 		private final boolean isRepeated;
 		private final boolean isMapField;
@@ -63,11 +64,26 @@ public final class MessageSchema {
 		FieldInfo(FieldDescriptor fd) {
 			this.descriptor = fd;
 			this.jsonName = fd.getJsonName();
+			this.nameWithColon = buildNameWithColon(this.jsonName);
 			this.javaType = fd.getJavaType();
 			this.isRepeated = fd.isRepeated();
 			this.isMapField = fd.isMapField();
 			this.hasPresence = fd.hasPresence();
 			this.mapValueDescriptor = fd.isMapField() ? fd.getMessageType().findFieldByName("value") : null;
+		}
+
+		/**
+		 * Pre-computes {@code "fieldName":} as a char array for use with
+		 * {@link com.alibaba.fastjson2.JSONWriter#writeNameRaw(char[])}. Works with
+		 * both UTF-8 and UTF-16 writers. Protobuf JSON field names are always ASCII.
+		 */
+		private static char[] buildNameWithColon(String name) {
+			char[] chars = new char[name.length() + 3];
+			chars[0] = '"';
+			name.getChars(0, name.length(), chars, 1);
+			chars[name.length() + 1] = '"';
+			chars[name.length() + 2] = ':';
+			return chars;
 		}
 
 		public FieldDescriptor descriptor() {
@@ -76,6 +92,10 @@ public final class MessageSchema {
 
 		public String jsonName() {
 			return jsonName;
+		}
+
+		public char[] nameWithColon() {
+			return nameWithColon;
 		}
 
 		public FieldDescriptor.JavaType javaType() {

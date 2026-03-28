@@ -13,11 +13,19 @@ import io.suboptimal.buffjson.proto.*;
 class Proto3JsonConformanceTest {
 
 	private static final JsonFormat.Printer REFERENCE = JsonFormat.printer().omittingInsignificantWhitespace();
+	private static final Encoder GENERIC_ENCODER = BuffJSON.encoder().withGeneratedEncoders(false);
 
 	private void assertMatchesReference(Message message) throws Exception {
 		String expected = REFERENCE.print(message);
-		String actual = BuffJSON.encode(message);
-		assertEquals(expected, actual, "Mismatch for " + message.getDescriptorForType().getFullName());
+		String typeName = message.getDescriptorForType().getFullName();
+
+		// Test codegen path (uses generated encoders if available)
+		String codegen = BuffJSON.encode(message);
+		assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
+
+		// Test generic path (reflection-based, no generated encoders)
+		String generic = GENERIC_ENCODER.encode(message);
+		assertEquals(expected, generic, "Generic mismatch for " + typeName);
 	}
 
 	// =========================================================================
@@ -560,11 +568,17 @@ class Proto3JsonConformanceTest {
 				.omittingInsignificantWhitespace();
 
 		private static final Encoder ENCODER = BuffJSON.encoder().withTypeRegistry(TYPE_REGISTRY);
+		private static final Encoder GENERIC_ANY_ENCODER = ENCODER.withGeneratedEncoders(false);
 
 		private void assertAnyMatchesReference(Message message) throws Exception {
 			String expected = ANY_REFERENCE.print(message);
-			String actual = ENCODER.encode(message);
-			assertEquals(expected, actual, "Mismatch for " + message.getDescriptorForType().getFullName());
+			String typeName = message.getDescriptorForType().getFullName();
+
+			String codegen = ENCODER.encode(message);
+			assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
+
+			String generic = GENERIC_ANY_ENCODER.encode(message);
+			assertEquals(expected, generic, "Generic mismatch for " + typeName);
 		}
 
 		@Test

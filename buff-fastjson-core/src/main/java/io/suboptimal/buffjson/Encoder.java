@@ -22,9 +22,15 @@ import com.google.protobuf.TypeRegistry;
 public final class Encoder {
 
 	private final TypeRegistry typeRegistry;
+	private final boolean useGeneratedEncoders;
 
 	Encoder(TypeRegistry typeRegistry) {
+		this(typeRegistry, true);
+	}
+
+	private Encoder(TypeRegistry typeRegistry, boolean useGeneratedEncoders) {
 		this.typeRegistry = typeRegistry;
+		this.useGeneratedEncoders = useGeneratedEncoders;
 	}
 
 	/**
@@ -37,7 +43,22 @@ public final class Encoder {
 	 * @return a new Encoder with the registry configured
 	 */
 	public Encoder withTypeRegistry(TypeRegistry registry) {
-		return new Encoder(registry);
+		return new Encoder(registry, useGeneratedEncoders);
+	}
+
+	/**
+	 * Controls whether generated encoders (from
+	 * {@code buff-fastjson-protoc-plugin}) are used when available. Defaults to
+	 * {@code true}.
+	 *
+	 * <p>
+	 * Setting to {@code false} forces the generic reflection-based path, useful for
+	 * benchmarking or testing both paths independently.
+	 *
+	 * @return a new Encoder with the setting applied
+	 */
+	public Encoder withGeneratedEncoders(boolean enabled) {
+		return new Encoder(typeRegistry, enabled);
 	}
 
 	/**
@@ -57,11 +78,17 @@ public final class Encoder {
 		if (typeRegistry != null) {
 			BuffJSON.ACTIVE_REGISTRY.set(typeRegistry);
 		}
+		if (!useGeneratedEncoders) {
+			BuffJSON.SKIP_GENERATED_ENCODERS.set(Boolean.TRUE);
+		}
 		try {
 			return JSON.toJSONString(msg);
 		} finally {
 			if (typeRegistry != null) {
 				BuffJSON.ACTIVE_REGISTRY.remove();
+			}
+			if (!useGeneratedEncoders) {
+				BuffJSON.SKIP_GENERATED_ENCODERS.remove();
 			}
 		}
 	}

@@ -6,7 +6,11 @@ import java.util.List;
 import com.alibaba.fastjson2.JSONWriter;
 import com.alibaba.fastjson2.writer.ObjectWriter;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
+
+import io.suboptimal.buffjson.BuffJSON;
+import io.suboptimal.buffjson.GeneratedEncoder;
 
 /**
  * Core serialization logic for protobuf messages. Implements fastjson2's
@@ -47,7 +51,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 		writeMessage(jsonWriter, (Message) object);
 	}
 
-	void writeMessage(JSONWriter jsonWriter, Message message) {
+	public void writeMessage(JSONWriter jsonWriter, Message message) {
 		jsonWriter.startObject();
 		writeFields(jsonWriter, message);
 		jsonWriter.endObject();
@@ -55,8 +59,17 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
 	/**
 	 * Writes all non-default fields of a message without the surrounding braces.
+	 * Uses a generated encoder if one is registered for this message type.
 	 */
 	static void writeFields(JSONWriter jsonWriter, Message message) {
+		if (Boolean.TRUE != BuffJSON.SKIP_GENERATED_ENCODERS.get() && !(message instanceof DynamicMessage)) {
+			GeneratedEncoder<Message> encoder = GeneratedEncoderRegistry.get(message.getDescriptorForType());
+			if (encoder != null) {
+				encoder.writeFields(jsonWriter, message);
+				return;
+			}
+		}
+
 		var schema = MessageSchema.forDescriptor(message.getDescriptorForType());
 		var fields = schema.fields();
 
@@ -67,15 +80,13 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 				List<?> entries = (List<?>) message.getField(fd);
 				if (entries.isEmpty())
 					continue;
-				jsonWriter.writeName(fieldInfo.jsonName());
-				jsonWriter.writeColon();
+				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
 				FieldWriter.writeMap(jsonWriter, fieldInfo.mapValueDescriptor(), entries);
 			} else if (fieldInfo.isRepeated()) {
 				List<?> values = (List<?>) message.getField(fd);
 				if (values.isEmpty())
 					continue;
-				jsonWriter.writeName(fieldInfo.jsonName());
-				jsonWriter.writeColon();
+				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
 				FieldWriter.writeRepeated(jsonWriter, fd, values);
 			} else {
 				Object value = message.getField(fd);
@@ -85,8 +96,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 				} else if (isDefaultValue(fieldInfo, value)) {
 					continue;
 				}
-				jsonWriter.writeName(fieldInfo.jsonName());
-				jsonWriter.writeColon();
+				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
 				FieldWriter.writeValue(jsonWriter, fd, value);
 			}
 		}

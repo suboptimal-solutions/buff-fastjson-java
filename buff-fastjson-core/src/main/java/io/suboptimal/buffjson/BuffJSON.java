@@ -43,6 +43,13 @@ public final class BuffJSON {
 	/** ThreadLocal holding the active TypeRegistry for the current encode call. */
 	public static final ThreadLocal<TypeRegistry> ACTIVE_REGISTRY = new ThreadLocal<>();
 
+	/**
+	 * When set to {@code true}, generated encoders are bypassed and the generic
+	 * reflection path is used. Used by
+	 * {@link Encoder#withGeneratedEncoders(boolean)} for benchmarking both paths.
+	 */
+	public static final ThreadLocal<Boolean> SKIP_GENERATED_ENCODERS = new ThreadLocal<>();
+
 	private static final Encoder DEFAULT_ENCODER = new Encoder(null);
 
 	private BuffJSON() {

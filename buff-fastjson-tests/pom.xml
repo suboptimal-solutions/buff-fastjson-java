@@ -32,10 +32,28 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>${project.build.directory}/generated-sources/protobuf</directory>
+                <includes>
+                    <include>META-INF/**</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>io.github.ascopes</groupId>
                 <artifactId>protobuf-maven-plugin</artifactId>
+                <configuration>
+                    <plugins>
+                        <plugin kind="jvm-maven">
+                            <groupId>io.suboptimal</groupId>
+                            <artifactId>buff-fastjson-protoc-plugin</artifactId>
+                            <version>${project.version}</version>
+                            <mainClass>io.suboptimal.buffjson.protoc.BuffJsonProtocPlugin</mainClass>
+                        </plugin>
+                    </plugins>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
