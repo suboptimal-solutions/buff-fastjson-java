@@ -1,16 +1,26 @@
 package io.suboptimal.buffjson;
 
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONFactory;
+import com.google.protobuf.Message;
 import com.google.protobuf.MessageOrBuilder;
-import com.google.protobuf.util.JsonFormat;
+import io.suboptimal.buffjson.internal.ProtobufWriterModule;
 
 public final class BuffJSON {
 
-    private static final JsonFormat.Printer PRINTER = JsonFormat.printer();
+    static {
+        JSONFactory.getDefaultObjectWriterProvider().register(ProtobufWriterModule.INSTANCE);
+    }
 
     private BuffJSON() {}
 
-    public static String encode(MessageOrBuilder message) throws InvalidProtocolBufferException {
-        return PRINTER.print(message);
+    public static String encode(MessageOrBuilder message) {
+        Message msg;
+        if (message instanceof Message m) {
+            msg = m;
+        } else {
+            msg = ((Message.Builder) message).buildPartial();
+        }
+        return JSON.toJSONString(msg);
     }
 }

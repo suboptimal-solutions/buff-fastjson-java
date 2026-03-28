@@ -6,6 +6,7 @@ target/
 *.iml
 .project
 .classpath
+.factorypath
 .settings/
 .vscode/
 *.swp

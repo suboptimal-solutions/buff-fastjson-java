@@ -35,6 +35,7 @@
         <junit.version>5.11.4</junit.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
+        <fastjson2.version>2.0.61</fastjson2.version>
     </properties>
 
     <dependencyManagement>
@@ -48,6 +49,11 @@
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java-util</artifactId>
                 <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.fastjson2</groupId>
+                <artifactId>fastjson2</artifactId>
+                <version>${fastjson2.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.suboptimal</groupId>
@@ -89,6 +95,7 @@
                         <protoc kind="binary-maven">
                             <version>${protobuf.version}</version>
                         </protoc>
+                        <embedSourcesInClassOutputs>false</embedSourcesInClassOutputs>
                     </configuration>
                 </plugin>
                 <plugin>
