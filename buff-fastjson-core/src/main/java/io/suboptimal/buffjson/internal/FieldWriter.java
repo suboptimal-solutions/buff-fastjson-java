@@ -10,10 +10,33 @@ import com.google.protobuf.Message;
 import java.util.Base64;
 import java.util.List;
 
+/**
+ * Type-dispatched writing of individual protobuf field values to a {@link JSONWriter}.
+ *
+ * <p>Handles all proto3 JSON formatting rules:
+ * <ul>
+ *   <li><b>uint32/fixed32</b>: unsigned representation via {@link Integer#toUnsignedLong(int)}</li>
+ *   <li><b>int64 and all 64-bit types</b>: quoted strings (proto3 spec)</li>
+ *   <li><b>uint64/fixed64</b>: unsigned quoted strings via {@link Long#toUnsignedString(long)}</li>
+ *   <li><b>float/double</b>: NaN and Infinity as quoted strings (not null)</li>
+ *   <li><b>bytes</b>: standard Base64 encoding</li>
+ *   <li><b>enum</b>: string name (handles both {@link EnumValueDescriptor} and raw Integer from map entries)</li>
+ *   <li><b>message</b>: delegates to {@link WellKnownTypes} or recursive {@link ProtobufMessageWriter}</li>
+ * </ul>
+ *
+ * <p>Also provides {@link #writeRepeated} and {@link #writeMap} for collection fields.
+ */
 public final class FieldWriter {
 
     private FieldWriter() {}
 
+    /**
+     * Writes a single field value to the JSON writer, dispatching based on the field's Java type.
+     *
+     * @param jsonWriter the fastjson2 writer
+     * @param fd         the field descriptor (provides type info for format decisions)
+     * @param value      the field value (boxed for primitives)
+     */
     public static void writeValue(JSONWriter jsonWriter, FieldDescriptor fd, Object value) {
         switch (fd.getJavaType()) {
             case INT -> {
@@ -63,6 +86,10 @@ public final class FieldWriter {
         }
     }
 
+    /**
+     * Writes a float value, handling NaN and Infinity as quoted strings per proto3 JSON spec.
+     * Also used by {@link WellKnownTypes} for FloatValue wrapper.
+     */
     static void writeFloatValue(JSONWriter jsonWriter, float value) {
         if (Float.isNaN(value)) {
             jsonWriter.writeString("NaN");
@@ -73,6 +100,10 @@ public final class FieldWriter {
         }
     }
 
+    /**
+     * Writes a double value, handling NaN and Infinity as quoted strings per proto3 JSON spec.
+     * Also used by {@link WellKnownTypes} for DoubleValue wrapper.
+     */
     static void writeDoubleValue(JSONWriter jsonWriter, double value) {
         if (Double.isNaN(value)) {
             jsonWriter.writeString("NaN");
@@ -83,6 +114,7 @@ public final class FieldWriter {
         }
     }
 
+    /** Writes a repeated field as a JSON array. Empty arrays should be skipped by the caller. */
     public static void writeRepeated(JSONWriter jsonWriter, FieldDescriptor fd, List<?> values) {
         jsonWriter.startArray();
         for (int i = 0; i < values.size(); i++) {
@@ -92,6 +124,10 @@ public final class FieldWriter {
         jsonWriter.endArray();
     }
 
+    /**
+     * Writes a map field as a JSON object. Map keys are always stringified in proto3 JSON
+     * (including numeric and boolean keys). Empty maps should be skipped by the caller.
+     */
     public static void writeMap(JSONWriter jsonWriter, FieldDescriptor fd, List<?> entries) {
         var valueDescriptor = fd.getMessageType().findFieldByName("value");
         jsonWriter.startObject();

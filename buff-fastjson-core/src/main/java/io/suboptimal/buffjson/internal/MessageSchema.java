@@ -5,6 +5,17 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Cached metadata for a protobuf message type, built from its {@link Descriptor}.
+ *
+ * <p>Each {@code MessageSchema} holds a pre-computed array of {@link FieldInfo} records
+ * (one per field in the Descriptor). This avoids the overhead of calling
+ * {@code Descriptor.getFields()} and extracting metadata on every serialization call.
+ *
+ * <p>Schemas are cached in a {@link ConcurrentHashMap} keyed by {@link Descriptor} (which
+ * is an immutable singleton per message type). Thread-safe, lock-free reads after initial
+ * population.
+ */
 public final class MessageSchema {
 
     private static final ConcurrentHashMap<Descriptor, MessageSchema> CACHE = new ConcurrentHashMap<>();
@@ -27,6 +38,12 @@ public final class MessageSchema {
         return fields;
     }
 
+    /**
+     * Pre-computed metadata for a single protobuf field, avoiding repeated Descriptor lookups.
+     *
+     * <p>Caches: the JSON field name (camelCase via {@link FieldDescriptor#getJsonName()}),
+     * the Java type, and boolean flags for repeated/map/presence semantics.
+     */
     public static final class FieldInfo {
         private final FieldDescriptor descriptor;
         private final String jsonName;

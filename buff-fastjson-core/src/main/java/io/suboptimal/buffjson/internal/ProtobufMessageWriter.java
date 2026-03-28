@@ -8,6 +8,20 @@ import com.google.protobuf.Message;
 import java.lang.reflect.Type;
 import java.util.List;
 
+/**
+ * Core serialization logic for protobuf messages. Implements fastjson2's {@link ObjectWriter}
+ * to produce proto3-spec-compliant JSON.
+ *
+ * <p>For each message:
+ * <ol>
+ *   <li>Looks up the cached {@link MessageSchema} for the message's {@link com.google.protobuf.Descriptors.Descriptor}</li>
+ *   <li>Iterates the pre-computed {@link MessageSchema.FieldInfo} array (not {@code getAllFields()} — no TreeMap allocation)</li>
+ *   <li>Skips fields with default values (proto3 semantics) or unset presence fields</li>
+ *   <li>Delegates value writing to {@link FieldWriter} (scalars, enums, bytes) or recursively to this class (nested messages)</li>
+ * </ol>
+ *
+ * <p>Default value detection uses raw bit comparison for float/double (to correctly handle {@code -0.0}).
+ */
 public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
     public static final ProtobufMessageWriter INSTANCE = new ProtobufMessageWriter();

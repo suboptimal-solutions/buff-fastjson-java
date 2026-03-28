@@ -14,6 +14,27 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Specialized JSON serialization for protobuf
+ * <a href="https://protobuf.dev/reference/protobuf/google.protobuf/">well-known types</a>.
+ *
+ * <p>These types have special JSON representations defined by the proto3 spec that differ
+ * from their standard message serialization. Supports 15 types:
+ *
+ * <ul>
+ *   <li><b>Timestamp</b>: RFC 3339 string ({@code "2024-01-01T00:00:00Z"})</li>
+ *   <li><b>Duration</b>: seconds string with 's' suffix ({@code "3600.500s"})</li>
+ *   <li><b>FieldMask</b>: comma-separated camelCase paths ({@code "foo,barBaz"})</li>
+ *   <li><b>Struct</b>: native JSON object</li>
+ *   <li><b>Value</b>: native JSON value (string, number, bool, null, object, or array)</li>
+ *   <li><b>ListValue</b>: native JSON array</li>
+ *   <li><b>Wrappers</b> (Int32Value, Int64Value, UInt32Value, UInt64Value, FloatValue,
+ *       DoubleValue, BoolValue, StringValue, BytesValue): unwrapped to primitive JSON values</li>
+ * </ul>
+ *
+ * <p>Nanos formatting uses 3, 6, or 9 digits (matching protobuf's convention) — never
+ * arbitrary precision.
+ */
 public final class WellKnownTypes {
 
     private static final Set<String> WELL_KNOWN_TYPE_NAMES = Set.of(
@@ -138,7 +159,6 @@ public final class WellKnownTypes {
 
     private static void writeValue(JSONWriter jsonWriter, Message message) {
         var desc = message.getDescriptorForType();
-        var kindField = desc.findFieldByName("null_value");
         var numberField = desc.findFieldByName("number_value");
         var stringField = desc.findFieldByName("string_value");
         var boolField = desc.findFieldByName("bool_value");
