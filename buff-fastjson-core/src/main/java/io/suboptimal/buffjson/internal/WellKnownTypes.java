@@ -1,9 +1,7 @@
 package io.suboptimal.buffjson.internal;
 
 import com.alibaba.fastjson2.JSONWriter;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.Descriptor;
-import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
 
@@ -13,6 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Specialized JSON serialization for protobuf
@@ -32,8 +31,8 @@ import java.util.Set;
  *       DoubleValue, BoolValue, StringValue, BytesValue): unwrapped to primitive JSON values</li>
  * </ul>
  *
- * <p>Nanos formatting uses 3, 6, or 9 digits (matching protobuf's convention) — never
- * arbitrary precision.
+ * <p>Nanos formatting uses 3, 6, or 9 digits (matching protobuf's convention of grouping
+ * into millis, micros, or nanos — never arbitrary precision).
  */
 public final class WellKnownTypes {
 
@@ -57,6 +56,12 @@ public final class WellKnownTypes {
 
     private static final DateTimeFormatter RFC3339 = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
             .withZone(ZoneOffset.UTC);
+
+    static final Base64.Encoder BASE64 = Base64.getEncoder();
+
+    /** Cached field descriptors for well-known types to avoid repeated findFieldByName lookups. */
+    private static final ConcurrentHashMap<Descriptor, FieldDescriptor[]> WKT_FIELD_CACHE =
+            new ConcurrentHashMap<>();
 
     private WellKnownTypes() {}
 
@@ -83,9 +88,9 @@ public final class WellKnownTypes {
     }
 
     private static void writeTimestamp(JSONWriter jsonWriter, Message message) {
-        var desc = message.getDescriptorForType();
-        long seconds = (long) message.getField(desc.findFieldByName("seconds"));
-        int nanos = (int) message.getField(desc.findFieldByName("nanos"));
+        var fields = getFields(message, "seconds", "nanos");
+        long seconds = (long) message.getField(fields[0]);
+        int nanos = (int) message.getField(fields[1]);
 
         Instant instant = Instant.ofEpochSecond(seconds, nanos);
         StringBuilder sb = new StringBuilder(30);
@@ -93,45 +98,39 @@ public final class WellKnownTypes {
         if (nanos == 0) {
             sb.append('Z');
         } else {
-            sb.append('.').append(formatNanos(nanos)).append('Z');
+            sb.append('.');
+            appendNanos(sb, nanos);
+            sb.append('Z');
         }
         jsonWriter.writeString(sb.toString());
     }
 
     private static void writeDuration(JSONWriter jsonWriter, Message message) {
-        var desc = message.getDescriptorForType();
-        long seconds = (long) message.getField(desc.findFieldByName("seconds"));
-        int nanos = (int) message.getField(desc.findFieldByName("nanos"));
+        var fields = getFields(message, "seconds", "nanos");
+        long seconds = (long) message.getField(fields[0]);
+        int nanos = (int) message.getField(fields[1]);
 
         StringBuilder sb = new StringBuilder(20);
         if (seconds < 0 || nanos < 0) {
-            // Handle negative durations
-            if (seconds < 0 && nanos < 0) {
-                sb.append('-');
-                seconds = -seconds;
-                nanos = -nanos;
-            } else if (seconds < 0) {
-                sb.append('-');
-                seconds = -seconds;
-            } else {
-                sb.append('-');
-                nanos = -nanos;
-            }
+            sb.append('-');
+            seconds = Math.abs(seconds);
+            nanos = Math.abs(nanos);
         }
         sb.append(seconds);
         if (nanos != 0) {
-            sb.append('.').append(formatNanos(nanos));
+            sb.append('.');
+            appendNanos(sb, nanos);
         }
         sb.append('s');
         jsonWriter.writeString(sb.toString());
     }
 
     private static void writeFieldMask(JSONWriter jsonWriter, Message message) {
-        var desc = message.getDescriptorForType();
+        var fields = getFields(message, "paths");
         @SuppressWarnings("unchecked")
-        List<String> paths = (List<String>) message.getField(desc.findFieldByName("paths"));
+        List<String> paths = (List<String>) message.getField(fields[0]);
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(paths.size() * 16);
         for (int i = 0; i < paths.size(); i++) {
             if (i > 0) sb.append(',');
             sb.append(snakeToCamel(paths.get(i)));
@@ -140,16 +139,15 @@ public final class WellKnownTypes {
     }
 
     private static void writeStruct(JSONWriter jsonWriter, Message message) {
-        var desc = message.getDescriptorForType();
-        var fieldsField = desc.findFieldByName("fields");
+        var fields = getFields(message, "fields");
         @SuppressWarnings("unchecked")
-        List<Message> entries = (List<Message>) message.getField(fieldsField);
+        List<Message> entries = (List<Message>) message.getField(fields[0]);
 
         jsonWriter.startObject();
         for (var entry : entries) {
-            var entryDesc = entry.getDescriptorForType();
-            String key = (String) entry.getField(entryDesc.findFieldByName("key"));
-            Message value = (Message) entry.getField(entryDesc.findFieldByName("value"));
+            var entryFields = getFields(entry, "key", "value");
+            String key = (String) entry.getField(entryFields[0]);
+            Message value = (Message) entry.getField(entryFields[1]);
             jsonWriter.writeName(key);
             jsonWriter.writeColon();
             writeValue(jsonWriter, value);
@@ -159,13 +157,6 @@ public final class WellKnownTypes {
 
     private static void writeValue(JSONWriter jsonWriter, Message message) {
         var desc = message.getDescriptorForType();
-        var numberField = desc.findFieldByName("number_value");
-        var stringField = desc.findFieldByName("string_value");
-        var boolField = desc.findFieldByName("bool_value");
-        var structField = desc.findFieldByName("struct_value");
-        var listField = desc.findFieldByName("list_value");
-
-        // Check which oneof field is set via the "kind" oneof
         var kindOneof = desc.getOneofs().get(0);
         var activeField = message.getOneofFieldDescriptor(kindOneof);
 
@@ -176,19 +167,18 @@ public final class WellKnownTypes {
 
         switch (activeField.getName()) {
             case "null_value" -> jsonWriter.writeNull();
-            case "number_value" -> jsonWriter.writeDouble((double) message.getField(numberField));
-            case "string_value" -> jsonWriter.writeString((String) message.getField(stringField));
-            case "bool_value" -> jsonWriter.writeBool((boolean) message.getField(boolField));
-            case "struct_value" -> writeStruct(jsonWriter, (Message) message.getField(structField));
-            case "list_value" -> writeListValue(jsonWriter, (Message) message.getField(listField));
+            case "number_value" -> jsonWriter.writeDouble((double) message.getField(activeField));
+            case "string_value" -> jsonWriter.writeString((String) message.getField(activeField));
+            case "bool_value" -> jsonWriter.writeBool((boolean) message.getField(activeField));
+            case "struct_value" -> writeStruct(jsonWriter, (Message) message.getField(activeField));
+            case "list_value" -> writeListValue(jsonWriter, (Message) message.getField(activeField));
         }
     }
 
     private static void writeListValue(JSONWriter jsonWriter, Message message) {
-        var desc = message.getDescriptorForType();
-        var valuesField = desc.findFieldByName("values");
+        var fields = getFields(message, "values");
         @SuppressWarnings("unchecked")
-        List<Message> values = (List<Message>) message.getField(valuesField);
+        List<Message> values = (List<Message>) message.getField(fields[0]);
 
         jsonWriter.startArray();
         for (int i = 0; i < values.size(); i++) {
@@ -199,42 +189,59 @@ public final class WellKnownTypes {
     }
 
     private static void writeWrapper(JSONWriter jsonWriter, Message message) {
+        // Wrapper types have a single "value" field — delegate to FieldWriter
+        // which already handles unsigned formatting, NaN/Infinity, Base64, etc.
+        var fields = getFields(message, "value");
+        FieldWriter.writeValue(jsonWriter, fields[0], message.getField(fields[0]));
+    }
+
+    /**
+     * Looks up and caches field descriptors for a well-known type message by name.
+     * Avoids repeated {@code findFieldByName()} calls on the hot path.
+     */
+    private static FieldDescriptor[] getFields(Message message, String... names) {
         var desc = message.getDescriptorForType();
-        var valueField = desc.findFieldByName("value");
-        Object value = message.getField(valueField);
-
-        switch (desc.getFullName()) {
-            case "google.protobuf.DoubleValue" -> FieldWriter.writeDoubleValue(jsonWriter, (double) value);
-            case "google.protobuf.FloatValue" -> FieldWriter.writeFloatValue(jsonWriter, (float) value);
-            case "google.protobuf.Int64Value" -> jsonWriter.writeString(Long.toString((long) value));
-            case "google.protobuf.UInt64Value" -> jsonWriter.writeString(Long.toUnsignedString((long) value));
-            case "google.protobuf.Int32Value" -> jsonWriter.writeInt32((int) value);
-            case "google.protobuf.UInt32Value" -> jsonWriter.writeInt64(Integer.toUnsignedLong((int) value));
-            case "google.protobuf.BoolValue" -> jsonWriter.writeBool((boolean) value);
-            case "google.protobuf.StringValue" -> jsonWriter.writeString((String) value);
-            case "google.protobuf.BytesValue" -> {
-                ByteString bytes = (ByteString) value;
-                jsonWriter.writeString(Base64.getEncoder().encodeToString(bytes.toByteArray()));
+        return WKT_FIELD_CACHE.computeIfAbsent(desc, d -> {
+            FieldDescriptor[] result = new FieldDescriptor[names.length];
+            for (int i = 0; i < names.length; i++) {
+                result[i] = d.findFieldByName(names[i]);
             }
-        }
+            return result;
+        });
     }
 
     /**
-     * Format nanos to 3, 6, or 9 digits (matching protobuf's convention).
+     * Appends nanos as 3, 6, or 9 digits to the StringBuilder.
+     * Protobuf convention: use minimum group size (millis/micros/nanos) to represent the value.
      */
-    private static String formatNanos(int nanos) {
+    private static void appendNanos(StringBuilder sb, int nanos) {
         if (nanos % 1_000_000 == 0) {
-            return String.format("%03d", nanos / 1_000_000);
+            int millis = nanos / 1_000_000;
+            if (millis < 10) sb.append("00");
+            else if (millis < 100) sb.append('0');
+            sb.append(millis);
         } else if (nanos % 1_000 == 0) {
-            return String.format("%06d", nanos / 1_000);
+            int micros = nanos / 1_000;
+            if (micros < 10) sb.append("00000");
+            else if (micros < 100) sb.append("0000");
+            else if (micros < 1000) sb.append("000");
+            else if (micros < 10000) sb.append("00");
+            else if (micros < 100000) sb.append('0');
+            sb.append(micros);
         } else {
-            return String.format("%09d", nanos);
+            if (nanos < 10) sb.append("00000000");
+            else if (nanos < 100) sb.append("0000000");
+            else if (nanos < 1000) sb.append("000000");
+            else if (nanos < 10000) sb.append("00000");
+            else if (nanos < 100000) sb.append("0000");
+            else if (nanos < 1000000) sb.append("000");
+            else if (nanos < 10000000) sb.append("00");
+            else if (nanos < 100000000) sb.append('0');
+            sb.append(nanos);
         }
     }
 
-    /**
-     * Convert snake_case to lowerCamelCase for FieldMask paths.
-     */
+    /** Converts snake_case to lowerCamelCase for FieldMask paths per proto3 JSON spec. */
     private static String snakeToCamel(String snake) {
         StringBuilder sb = new StringBuilder(snake.length());
         boolean upperNext = false;

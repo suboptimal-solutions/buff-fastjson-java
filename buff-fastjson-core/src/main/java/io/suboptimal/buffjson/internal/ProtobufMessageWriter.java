@@ -37,7 +37,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
         writeMessage(jsonWriter, (Message) object);
     }
 
-    public void writeMessage(JSONWriter jsonWriter, Message message) {
+    void writeMessage(JSONWriter jsonWriter, Message message) {
         var schema = MessageSchema.forDescriptor(message.getDescriptorForType());
         var fields = schema.fields();
 
@@ -59,19 +59,15 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
                 jsonWriter.writeColon();
                 FieldWriter.writeRepeated(jsonWriter, fd, values);
             } else {
+                Object value = message.getField(fd);
                 if (fieldInfo.hasPresence()) {
                     if (!message.hasField(fd)) continue;
-                } else {
-                    Object value = message.getField(fd);
-                    if (isDefaultValue(fieldInfo, value)) continue;
-                    jsonWriter.writeName(fieldInfo.jsonName());
-                    jsonWriter.writeColon();
-                    FieldWriter.writeValue(jsonWriter, fd, value);
+                } else if (isDefaultValue(fieldInfo, value)) {
                     continue;
                 }
                 jsonWriter.writeName(fieldInfo.jsonName());
                 jsonWriter.writeColon();
-                FieldWriter.writeValue(jsonWriter, fd, message.getField(fd));
+                FieldWriter.writeValue(jsonWriter, fd, value);
             }
         }
 
@@ -86,7 +82,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
             case DOUBLE -> Double.doubleToRawLongBits((double) value) == 0;
             case BOOLEAN -> !(boolean) value;
             case STRING -> ((String) value).isEmpty();
-            case BYTE_STRING -> value.equals(com.google.protobuf.ByteString.EMPTY);
+            case BYTE_STRING -> ((com.google.protobuf.ByteString) value).isEmpty();
             case ENUM -> ((com.google.protobuf.Descriptors.EnumValueDescriptor) value).getNumber() == 0;
             case MESSAGE -> false;
         };

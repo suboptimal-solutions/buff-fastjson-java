@@ -7,7 +7,6 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 
-import java.util.Base64;
 import java.util.List;
 
 /**
@@ -63,7 +62,7 @@ public final class FieldWriter {
             case STRING -> jsonWriter.writeString((String) value);
             case BYTE_STRING -> {
                 ByteString bytes = (ByteString) value;
-                jsonWriter.writeString(Base64.getEncoder().encodeToString(bytes.toByteArray()));
+                jsonWriter.writeString(WellKnownTypes.BASE64.encodeToString(bytes.toByteArray()));
             }
             case ENUM -> {
                 if (value instanceof EnumValueDescriptor enumValue) {
@@ -133,7 +132,6 @@ public final class FieldWriter {
         jsonWriter.startObject();
         for (Object entry : entries) {
             MapEntry<?, ?> mapEntry = (MapEntry<?, ?>) entry;
-            // writeName handles comma + colon automatically in fastjson2
             jsonWriter.writeName(mapEntry.getKey().toString());
             jsonWriter.writeColon();
             writeValue(jsonWriter, valueDescriptor, mapEntry.getValue());
