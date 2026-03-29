@@ -22,3 +22,6 @@ Thumbs.db
 *.jar
 *.log
 dependency-reduced-pom.xml
+
+# Benchmark reports (machine-specific)
+benchmark-reports/

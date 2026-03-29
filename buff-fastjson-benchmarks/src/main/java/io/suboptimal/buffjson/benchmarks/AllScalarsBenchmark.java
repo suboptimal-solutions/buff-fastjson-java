@@ -9,7 +9,7 @@ import org.openjdk.jmh.annotations.*;
 
 import io.suboptimal.buffjson.BuffJSON;
 import io.suboptimal.buffjson.Encoder;
-import io.suboptimal.buffjson.proto.SimpleMessage;
+import io.suboptimal.buffjson.proto.BenchAllScalars;
 
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.SECONDS)
@@ -17,21 +17,21 @@ import io.suboptimal.buffjson.proto.SimpleMessage;
 @Measurement(iterations = 5, time = 1, timeUnit = TimeUnit.SECONDS)
 @Fork(2)
 @State(Scope.Thread)
-public class SimpleMessageBenchmark {
+public class AllScalarsBenchmark {
 
 	private static final int POOL_SIZE = 1024;
 	private static final int MASK = POOL_SIZE - 1;
 	private static final JsonFormat.Printer PROTO_PRINTER = JsonFormat.printer();
 	private static final Encoder GENERIC_ENCODER = BuffJSON.encoder().withGeneratedEncoders(false);
 
-	private SimpleMessage message;
-	private SimpleMessage[] randomMessages;
+	private BenchAllScalars message;
+	private BenchAllScalars[] randomMessages;
 	private int index;
 
 	@Setup
 	public void setup() {
-		message = BenchmarkData.createSimpleMessage();
-		randomMessages = BenchmarkData.createRandomSimpleMessages(new Random(42), POOL_SIZE);
+		message = BenchmarkData.createBenchAllScalars();
+		randomMessages = BenchmarkData.createRandomBenchAllScalars(new Random(42), POOL_SIZE);
 	}
 
 	@Benchmark

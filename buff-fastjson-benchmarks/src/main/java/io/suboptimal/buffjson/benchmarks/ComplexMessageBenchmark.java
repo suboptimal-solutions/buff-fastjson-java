@@ -1,5 +1,6 @@
 package io.suboptimal.buffjson.benchmarks;
 
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 import com.google.protobuf.util.JsonFormat;
@@ -18,14 +19,19 @@ import io.suboptimal.buffjson.proto.ComplexMessage;
 @State(Scope.Thread)
 public class ComplexMessageBenchmark {
 
+	private static final int POOL_SIZE = 1024;
+	private static final int MASK = POOL_SIZE - 1;
 	private static final JsonFormat.Printer PROTO_PRINTER = JsonFormat.printer();
 	private static final Encoder GENERIC_ENCODER = BuffJSON.encoder().withGeneratedEncoders(false);
 
 	private ComplexMessage message;
+	private ComplexMessage[] randomMessages;
+	private int index;
 
 	@Setup
 	public void setup() {
 		message = BenchmarkData.createComplexMessage();
+		randomMessages = BenchmarkData.createRandomComplexMessages(new Random(42), POOL_SIZE);
 	}
 
 	@Benchmark
@@ -34,12 +40,27 @@ public class ComplexMessageBenchmark {
 	}
 
 	@Benchmark
+	public String buffJsonCodegenRandom() throws Exception {
+		return BuffJSON.encode(randomMessages[index++ & MASK]);
+	}
+
+	@Benchmark
 	public String buffJson() throws Exception {
 		return GENERIC_ENCODER.encode(message);
 	}
 
 	@Benchmark
+	public String buffJsonRandom() throws Exception {
+		return GENERIC_ENCODER.encode(randomMessages[index++ & MASK]);
+	}
+
+	@Benchmark
 	public String protoJsonFormat() throws Exception {
 		return PROTO_PRINTER.print(message);
+	}
+
+	@Benchmark
+	public String protoJsonFormatRandom() throws Exception {
+		return PROTO_PRINTER.print(randomMessages[index++ & MASK]);
 	}
 }

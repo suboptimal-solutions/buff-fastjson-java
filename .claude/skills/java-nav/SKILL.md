@@ -1,7 +1,8 @@
 ---
+
 name: java-nav
 description: IDE-like Java code navigation CLI. Use when exploring Java classes, finding implementations, searching source code, analyzing dependencies, or doing precise semantic queries.
----
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # java-nav — Java code navigation
 
@@ -18,6 +19,7 @@ This project has `java-nav` CLI installed for Java code navigation.
 ## Commands (use `-d <path>` if not in project root)
 
 ### Tier 1 — Instant
+
 ```bash
 java-nav api <class>                # Public API surface (methods, fields, generics)
 java-nav source <class>             # Show source code (project + dependencies)
@@ -28,12 +30,14 @@ java-nav deps <class>               # Class-level dependency graph
 ```
 
 ### Tier 2 — Bytecode scan (~2s)
+
 ```bash
 java-nav impls <interface>          # Find all implementations
 java-nav subtypes <class>           # Find all subclasses
 ```
 
 ### Tier 3 — Semantic (jdtls, ~5-15s on-demand)
+
 ```bash
 java-nav refs <Class.method>        # Find all references (type-aware, not text)
 java-nav def <Class.method>         # Go to definition, show source
@@ -42,6 +46,7 @@ java-nav symbols <file>             # List all symbols in a file with line numbe
 ```
 
 For faster Tier 3 queries, start the daemon first:
+
 ```bash
 java-nav lsp start                  # Start jdtls daemon (~30s, then <200ms per query)
 java-nav lsp stop                   # Stop when done
@@ -49,18 +54,18 @@ java-nav lsp stop                   # Stop when done
 
 ## When to use which command
 
-| Question | Command | Do NOT use |
-|---|---|---|
-| What methods does X have? | `java-nav api X` | Do not read .class files or javap manually |
-| Show me the code for X | `java-nav source X` | Do not cat/find files or unpack JARs |
-| Where is X used? | `java-nav refs X.method` or `java-nav grep X` | Do not use grep/rg directly |
-| What depends on X? | `java-nav deps X` | Do not run jdeps manually |
-| Who implements X? | `java-nav impls X` | Do not grep for "implements" |
-| Who extends X? | `java-nav subtypes X` | Do not grep for "extends" |
-| Jump to definition of X | `java-nav def X.method` | Do not manually search files |
-| What's in this file? | `java-nav symbols <file>` | Do not read the entire file |
-| Find classes named X | `java-nav find X` | Do not use find/grep for class names |
-| Search dependency code | `java-nav grep --deps "pattern"` | Do not unpack sources manually |
+|         Question          |                    Command                    |                 Do NOT use                 |
+|---------------------------|-----------------------------------------------|--------------------------------------------|
+| What methods does X have? | `java-nav api X`                              | Do not read .class files or javap manually |
+| Show me the code for X    | `java-nav source X`                           | Do not cat/find files or unpack JARs       |
+| Where is X used?          | `java-nav refs X.method` or `java-nav grep X` | Do not use grep/rg directly                |
+| What depends on X?        | `java-nav deps X`                             | Do not run jdeps manually                  |
+| Who implements X?         | `java-nav impls X`                            | Do not grep for "implements"               |
+| Who extends X?            | `java-nav subtypes X`                         | Do not grep for "extends"                  |
+| Jump to definition of X   | `java-nav def X.method`                       | Do not manually search files               |
+| What's in this file?      | `java-nav symbols <file>`                     | Do not read the entire file                |
+| Find classes named X      | `java-nav find X`                             | Do not use find/grep for class names       |
+| Search dependency code    | `java-nav grep --deps "pattern"`              | Do not unpack sources manually             |
 
 ## Strategy
 
@@ -76,3 +81,4 @@ java-nav lsp stop                   # Stop when done
 - Works for project classes, dependency JARs, and JDK stdlib
 - Everything is cached in `target/java-nav/` — never run Maven dependency commands yourself
 - Requires: JDK 17+, Maven. JDK 21+ for Tier 3 (jdtls)
+

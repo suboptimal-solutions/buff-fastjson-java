@@ -29,21 +29,21 @@ For each non-WKT, non-map-entry message type:
 
 ## Field Handling
 
-| Category | Generated pattern |
-|---|---|
-| Scalar (no presence) | `int v = msg.getId(); if (v != 0) { writeNameRaw; writeInt32(v); }` |
-| Scalar (optional) | `if (msg.hasId()) { writeNameRaw; writeInt32(msg.getId()); }` |
-| uint32/fixed32 | `writeInt64(Integer.toUnsignedLong(...))` |
-| int64 variants | `writeString(Long.toString(...))` |
-| uint64/fixed64 | `writeString(Long.toUnsignedString(...))` |
-| float/double | Inline NaN/Infinity check |
-| Enum | `msg.getStatusValue()` + `Status.forNumber(ev)` + `getValueDescriptor().getName()` |
-| bytes | `Base64.getEncoder().encodeToString(v.toByteArray())` |
-| Repeated | `msg.getFooList()`, check isEmpty, iterate |
-| Map | `msg.getFooMap()`, check isEmpty, iterate entries |
-| Oneof | `switch (msg.getFooCase())` with per-case typed accessor |
-| Nested message (non-WKT) | `ProtobufMessageWriter.INSTANCE.writeMessage(jsonWriter, nested)` |
-| Nested message (WKT) | `WellKnownTypes.write(jsonWriter, nested)` |
+|         Category         |                                 Generated pattern                                  |
+|--------------------------|------------------------------------------------------------------------------------|
+| Scalar (no presence)     | `int v = msg.getId(); if (v != 0) { writeNameRaw; writeInt32(v); }`                |
+| Scalar (optional)        | `if (msg.hasId()) { writeNameRaw; writeInt32(msg.getId()); }`                      |
+| uint32/fixed32           | `writeInt64(Integer.toUnsignedLong(...))`                                          |
+| int64 variants           | `writeString(Long.toString(...))`                                                  |
+| uint64/fixed64           | `writeString(Long.toUnsignedString(...))`                                          |
+| float/double             | Inline NaN/Infinity check                                                          |
+| Enum                     | `msg.getStatusValue()` + `Status.forNumber(ev)` + `getValueDescriptor().getName()` |
+| bytes                    | `Base64.getEncoder().encodeToString(v.toByteArray())`                              |
+| Repeated                 | `msg.getFooList()`, check isEmpty, iterate                                         |
+| Map                      | `msg.getFooMap()`, check isEmpty, iterate entries                                  |
+| Oneof                    | `switch (msg.getFooCase())` with per-case typed accessor                           |
+| Nested message (non-WKT) | `ProtobufMessageWriter.INSTANCE.writeMessage(jsonWriter, nested)`                  |
+| Nested message (WKT)     | `WellKnownTypes.write(jsonWriter, nested)`                                         |
 
 ## Name Resolution
 
@@ -68,3 +68,4 @@ For each non-WKT, non-map-entry message type:
 ## Dependencies
 
 - `com.google.protobuf:protobuf-java` — CodeGeneratorRequest, FileDescriptor, FieldDescriptor
+
