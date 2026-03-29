@@ -46,6 +46,12 @@ import io.suboptimal.buffjson.BuffJSON;
  * <p>
  * Nanos formatting uses 3, 6, or 9 digits (matching protobuf's convention of
  * grouping into millis, micros, or nanos — never arbitrary precision).
+ *
+ * <p>
+ * For Timestamp and Duration, {@code writeTimestampDirect()} and
+ * {@code writeDurationDirect()} accept primitive seconds/nanos directly,
+ * bypassing descriptor lookup and {@code message.getField()} reflection. These
+ * are used by generated encoders that know the field type at generation time.
  */
 public final class WellKnownTypes {
 
@@ -150,7 +156,15 @@ public final class WellKnownTypes {
 		var fields = getFields(message, "seconds", "nanos");
 		long seconds = (long) message.getField(fields[0]);
 		int nanos = (int) message.getField(fields[1]);
+		writeTimestampDirect(jsonWriter, seconds, nanos);
+	}
 
+	/**
+	 * Writes a Timestamp directly from typed seconds/nanos, bypassing descriptor
+	 * lookup and reflection. Used by generated encoders that know the field type at
+	 * generation time.
+	 */
+	public static void writeTimestampDirect(JSONWriter jsonWriter, long seconds, int nanos) {
 		Instant instant = Instant.ofEpochSecond(seconds, nanos);
 		StringBuilder sb = new StringBuilder(30);
 		RFC3339.formatTo(instant, sb);
@@ -168,7 +182,15 @@ public final class WellKnownTypes {
 		var fields = getFields(message, "seconds", "nanos");
 		long seconds = (long) message.getField(fields[0]);
 		int nanos = (int) message.getField(fields[1]);
+		writeDurationDirect(jsonWriter, seconds, nanos);
+	}
 
+	/**
+	 * Writes a Duration directly from typed seconds/nanos, bypassing descriptor
+	 * lookup and reflection. Used by generated encoders that know the field type at
+	 * generation time.
+	 */
+	public static void writeDurationDirect(JSONWriter jsonWriter, long seconds, int nanos) {
 		StringBuilder sb = new StringBuilder(20);
 		if (seconds < 0 || nanos < 0) {
 			sb.append('-');

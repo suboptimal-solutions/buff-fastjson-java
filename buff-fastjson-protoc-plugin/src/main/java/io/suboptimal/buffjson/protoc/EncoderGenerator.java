@@ -1,5 +1,6 @@
 package io.suboptimal.buffjson.protoc;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,6 +12,25 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
  * Generates a Java source file for a per-message-type JSON encoder. The
  * generated encoder implements {@code GeneratedEncoder<T>} and uses typed
  * accessors directly, avoiding reflection, boxing, and runtime type dispatch.
+ *
+ * <p>
+ * Generated encoders include these optimizations:
+ * <ul>
+ * <li><b>INSTANCE singleton</b> — enables direct calls from other generated
+ * encoders
+ * <li><b>Direct nested encoder calls</b> — nested messages call
+ * {@code FooJsonEncoder.INSTANCE.writeFields()} directly, bypassing
+ * {@code GeneratedEncoderRegistry} lookup, ThreadLocal reads, and instanceof
+ * checks
+ * <li><b>Inline WKT Timestamp/Duration</b> — calls
+ * {@code WellKnownTypes.writeTimestampDirect()} with typed accessors, bypassing
+ * descriptor string switch, field cache lookup, and reflection+boxing
+ * <li><b>Pre-cached enum name arrays</b> — static {@code String[]} built from
+ * enum descriptor values at class init, replacing
+ * {@code forNumber()+getValueDescriptor().getName()} per write
+ * <li><b>String map key optimization</b> — avoids redundant {@code toString()}
+ * for String-typed map keys
+ * </ul>
  */
 final class EncoderGenerator {
 
@@ -53,6 +73,31 @@ final class EncoderGenerator {
 		sb.append("        chars[name.length() + 2] = ':';\n");
 		sb.append("        return chars;\n");
 		sb.append("    }\n\n");
+
+		// Pre-collect enum types used by int-valued fields (implicit presence,
+		// explicit presence, oneof) so we can generate cached name arrays.
+		// Key: enum constant prefix (e.g. "STATUS"), Value: Java enum class name
+		Map<String, String> enumArrays = collectEnumTypes(msgDesc, protoToJavaClass);
+		for (var entry : enumArrays.entrySet()) {
+			sb.append("    private static final String[] ENUM_").append(entry.getKey()).append("_NAMES;\n");
+		}
+		if (!enumArrays.isEmpty()) {
+			sb.append("    static {\n");
+			for (var entry : enumArrays.entrySet()) {
+				String enumClass = entry.getValue();
+				// Use the enum's descriptor values to avoid UNRECOGNIZED
+				// (which throws from getNumber())
+				sb.append("        var edVals = ").append(enumClass).append(".getDescriptor().getValues();\n");
+				sb.append("        int max = 0;\n");
+				sb.append("        for (var v : edVals) if (v.getNumber() > max) max = v.getNumber();\n");
+				sb.append("        ENUM_").append(entry.getKey()).append("_NAMES = new String[max + 1];\n");
+				sb.append("        for (var v : edVals) ENUM_").append(entry.getKey())
+						.append("_NAMES[v.getNumber()] = v.getName();\n");
+			}
+			sb.append("    }\n");
+		}
+		if (!enumArrays.isEmpty())
+			sb.append("\n");
 
 		// descriptorFullName()
 		sb.append("    @Override\n");
@@ -168,12 +213,11 @@ final class EncoderGenerator {
 				sb.append("        }\n");
 			}
 			case ENUM -> {
-				String enumClass = protoToJavaClass.get(fd.getEnumType().getFullName());
 				sb.append("        {\n");
 				sb.append("            int ev = message.").append(getterName(fd)).append("Value();\n");
 				sb.append("            if (ev != 0) {\n");
 				sb.append("                jsonWriter.writeNameRaw(").append(constName).append(");\n");
-				writeEnumValue(sb, enumClass, "ev");
+				writeEnumValue(sb, enumArrayConstant(fd), "ev");
 				sb.append("            }\n");
 				sb.append("        }\n");
 			}
@@ -206,10 +250,9 @@ final class EncoderGenerator {
 				sb.append("            jsonWriter.writeString(java.util.Base64.getEncoder().encodeToString(")
 						.append(getter).append(".toByteArray()));\n");
 			case ENUM -> {
-				String enumClass = protoToJavaClass.get(fd.getEnumType().getFullName());
 				sb.append("            {\n");
 				sb.append("                int ev = message.").append(getterName(fd)).append("Value();\n");
-				writeEnumValue(sb, enumClass, "ev");
+				writeEnumValue(sb, enumArrayConstant(fd), "ev");
 				sb.append("            }\n");
 			}
 			case MESSAGE -> writeMessageValue(sb, fd, getter, protoToJavaClass, protoToEncoderClass);
@@ -221,9 +264,18 @@ final class EncoderGenerator {
 	private static void generateRepeatedField(StringBuilder sb, FieldDescriptor fd, String msgClass,
 			Map<String, String> protoToJavaClass, Map<String, String> protoToEncoderClass) {
 
-		String listGetter = "message." + getterName(fd) + "List()";
 		String constName = "NAME_" + constantName(fd);
-		String elementType = javaBoxedType(fd, protoToJavaClass);
+
+		// For enums, use raw int value list to handle UNRECOGNIZED constants
+		String listGetter;
+		String elementType;
+		if (fd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+			listGetter = "message." + getterName(fd) + "ValueList()";
+			elementType = "Integer";
+		} else {
+			listGetter = "message." + getterName(fd) + "List()";
+			elementType = javaBoxedType(fd, protoToJavaClass);
+		}
 
 		sb.append("        {\n");
 		sb.append("            java.util.List<").append(elementType).append("> values = ").append(listGetter)
@@ -244,11 +296,9 @@ final class EncoderGenerator {
 			case BYTE_STRING -> sb.append(
 					"                    jsonWriter.writeString(java.util.Base64.getEncoder().encodeToString(values.get(i).toByteArray()));\n");
 			case ENUM -> {
-				// Repeated enums: values are EnumValueDescriptor from getField,
-				// but typed list returns the Java enum
-				String enumClass = protoToJavaClass.get(fd.getEnumType().getFullName());
-				sb.append("                    ").append(enumClass).append(" e = values.get(i);\n");
-				sb.append("                    jsonWriter.writeString(e.getValueDescriptor().getName());\n");
+				// Use raw int values to handle UNRECOGNIZED enum constants
+				// (which throw from getNumber()/getValueDescriptor())
+				writeEnumValue(sb, enumArrayConstant(fd), "values.get(i)");
 			}
 			case MESSAGE -> writeMessageValue(sb, fd, "values.get(i)", protoToJavaClass, protoToEncoderClass);
 		}
@@ -262,15 +312,24 @@ final class EncoderGenerator {
 	private static void generateMapField(StringBuilder sb, FieldDescriptor fd, String msgClass,
 			Map<String, String> protoToJavaClass, Map<String, String> protoToEncoderClass) {
 
-		String mapGetter = "message." + getterName(fd) + "Map()";
 		String constName = "NAME_" + constantName(fd);
 
 		Descriptor entryDesc = fd.getMessageType();
 		FieldDescriptor keyFd = entryDesc.findFieldByName("key");
 		FieldDescriptor valueFd = entryDesc.findFieldByName("value");
 
+		// For enum-valued maps, use ValueMap() getter (returns Map<K, Integer>)
+		// to safely handle UNRECOGNIZED enum constants
+		String mapGetter;
 		String keyType = javaBoxedType(keyFd, protoToJavaClass);
-		String valueType = javaBoxedType(valueFd, protoToJavaClass);
+		String valueType;
+		if (valueFd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+			mapGetter = "message." + getterName(fd) + "ValueMap()";
+			valueType = "Integer";
+		} else {
+			mapGetter = "message." + getterName(fd) + "Map()";
+			valueType = javaBoxedType(valueFd, protoToJavaClass);
+		}
 
 		sb.append("        {\n");
 		sb.append("            java.util.Map<").append(keyType).append(", ").append(valueType).append("> map = ")
@@ -279,7 +338,12 @@ final class EncoderGenerator {
 		sb.append("                jsonWriter.writeNameRaw(").append(constName).append(");\n");
 		sb.append("                jsonWriter.startObject();\n");
 		sb.append("                for (var entry : map.entrySet()) {\n");
-		sb.append("                    jsonWriter.writeName(entry.getKey().toString());\n");
+		if (keyFd.getJavaType() == FieldDescriptor.JavaType.STRING) {
+			// Key is already String — call writeName directly without toString()
+			sb.append("                    jsonWriter.writeName(entry.getKey());\n");
+		} else {
+			sb.append("                    jsonWriter.writeName(entry.getKey().toString());\n");
+		}
 		sb.append("                    jsonWriter.writeColon();\n");
 
 		switch (valueFd.getJavaType()) {
@@ -292,9 +356,10 @@ final class EncoderGenerator {
 			case BYTE_STRING -> sb.append(
 					"                    jsonWriter.writeString(java.util.Base64.getEncoder().encodeToString(entry.getValue().toByteArray()));\n");
 			case ENUM -> {
-				String enumClass = protoToJavaClass.get(valueFd.getEnumType().getFullName());
-				sb.append("                    ").append(enumClass).append(" e = entry.getValue();\n");
-				sb.append("                    jsonWriter.writeString(e.getValueDescriptor().getName());\n");
+				// Map enum values: entry.getValue() is an Integer (raw int) since
+				// we use the ValueMap getter. Look up in pre-cached name array.
+				writeEnumValue(sb, "ENUM_" + valueFd.getEnumType().getName().toUpperCase() + "_NAMES",
+						"entry.getValue()");
 			}
 			case MESSAGE -> writeMessageValue(sb, valueFd, "entry.getValue()", protoToJavaClass, protoToEncoderClass);
 		}
@@ -331,10 +396,9 @@ final class EncoderGenerator {
 					sb.append("                jsonWriter.writeString(java.util.Base64.getEncoder().encodeToString(")
 							.append(getter).append(".toByteArray()));\n");
 				case ENUM -> {
-					String enumClass = protoToJavaClass.get(fd.getEnumType().getFullName());
 					sb.append("                {\n");
 					sb.append("                    int ev = message.").append(getterName(fd)).append("Value();\n");
-					writeEnumValue(sb, enumClass, "ev");
+					writeEnumValue(sb, enumArrayConstant(fd), "ev");
 					sb.append("                }\n");
 				}
 				case MESSAGE -> writeMessageValue(sb, fd, getter, protoToJavaClass, protoToEncoderClass);
@@ -388,18 +452,33 @@ final class EncoderGenerator {
 		sb.append("                }\n");
 	}
 
-	private static void writeEnumValue(StringBuilder sb, String enumClass, String expr) {
-		sb.append("                ").append(enumClass).append(" e = ").append(enumClass).append(".forNumber(")
-				.append(expr).append(");\n");
-		sb.append(
-				"                jsonWriter.writeString(e != null ? e.getValueDescriptor().getName() : String.valueOf(")
-				.append(expr).append("));\n");
+	private static void writeEnumValue(StringBuilder sb, String enumArrayConstant, String expr) {
+		sb.append("                {\n");
+		sb.append("                    String[] names = ").append(enumArrayConstant).append(";\n");
+		sb.append("                    String name = ").append(expr).append(" >= 0 && ").append(expr)
+				.append(" < names.length ? names[").append(expr).append("] : null;\n");
+		sb.append("                    if (name != null) jsonWriter.writeString(name);\n");
+		sb.append("                    else jsonWriter.writeInt32(").append(expr).append(");\n");
+		sb.append("                }\n");
 	}
 
 	private static void writeMessageValue(StringBuilder sb, FieldDescriptor fd, String expr,
 			Map<String, String> protoToJavaClass, Map<String, String> protoToEncoderClass) {
 		String fullName = fd.getMessageType().getFullName();
-		if (WELL_KNOWN_TYPES.contains(fullName)) {
+		if ("google.protobuf.Timestamp".equals(fullName)) {
+			// Direct typed access — bypasses descriptor lookup and reflection
+			sb.append("                {\n");
+			sb.append("                    var ts = ").append(expr).append(";\n");
+			sb.append(
+					"                    io.suboptimal.buffjson.internal.WellKnownTypes.writeTimestampDirect(jsonWriter, ts.getSeconds(), ts.getNanos());\n");
+			sb.append("                }\n");
+		} else if ("google.protobuf.Duration".equals(fullName)) {
+			sb.append("                {\n");
+			sb.append("                    var dur = ").append(expr).append(";\n");
+			sb.append(
+					"                    io.suboptimal.buffjson.internal.WellKnownTypes.writeDurationDirect(jsonWriter, dur.getSeconds(), dur.getNanos());\n");
+			sb.append("                }\n");
+		} else if (WELL_KNOWN_TYPES.contains(fullName)) {
 			sb.append("                io.suboptimal.buffjson.internal.WellKnownTypes.write(jsonWriter, ").append(expr)
 					.append(");\n");
 		} else {
@@ -446,5 +525,44 @@ final class EncoderGenerator {
 			case MESSAGE ->
 				protoToJavaClass.getOrDefault(fd.getMessageType().getFullName(), "com.google.protobuf.Message");
 		};
+	}
+
+	/**
+	 * Returns the static array constant name for a field's enum type (e.g.
+	 * "ENUM_STATUS_NAMES").
+	 */
+	private static String enumArrayConstant(FieldDescriptor fd) {
+		return "ENUM_" + fd.getEnumType().getName().toUpperCase() + "_NAMES";
+	}
+
+	/**
+	 * Collects unique enum types used across the message descriptor (scalar,
+	 * repeated, map value, and oneof fields). Returns a map from array constant
+	 * prefix (e.g. "STATUS") to fully-qualified Java enum class name.
+	 */
+	private static Map<String, String> collectEnumTypes(Descriptor msgDesc, Map<String, String> protoToJavaClass) {
+		Map<String, String> enums = new LinkedHashMap<>();
+		for (FieldDescriptor fd : msgDesc.getFields()) {
+			if (fd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+				String key = fd.getEnumType().getName().toUpperCase();
+				enums.putIfAbsent(key, protoToJavaClass.get(fd.getEnumType().getFullName()));
+			} else if (fd.isMapField()) {
+				// Check map value type for enum
+				FieldDescriptor valueFd = fd.getMessageType().findFieldByName("value");
+				if (valueFd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+					String key = valueFd.getEnumType().getName().toUpperCase();
+					enums.putIfAbsent(key, protoToJavaClass.get(valueFd.getEnumType().getFullName()));
+				}
+			}
+		}
+		for (OneofDescriptor oneof : msgDesc.getRealOneofs()) {
+			for (FieldDescriptor fd : oneof.getFields()) {
+				if (fd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+					String key = fd.getEnumType().getName().toUpperCase();
+					enums.putIfAbsent(key, protoToJavaClass.get(fd.getEnumType().getFullName()));
+				}
+			}
+		}
+		return enums;
 	}
 }

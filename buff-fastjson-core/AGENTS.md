@@ -20,6 +20,9 @@ io.suboptimal.buffjson.internal/
   MessageSchema.java               # Cached field metadata per Descriptor (generic path)
   FieldWriter.java                 # Type-dispatched value writing (scalars, maps, repeated) (generic path)
   WellKnownTypes.java              # Special handling for 16 well-known protobuf types
+                                   #   writeTimestampDirect()/writeDurationDirect() accept
+                                   #   primitives directly — used by codegen to bypass
+                                   #   descriptor lookup and getField() reflection
 ```
 
 ## Serialization Flow (hot path)
@@ -30,7 +33,11 @@ io.suboptimal.buffjson.internal/
    - First checks `GeneratedEncoderRegistry.get(descriptor)`:
      - Skipped if `SKIP_GENERATED_ENCODERS` ThreadLocal is set (for benchmarking)
      - Skipped for `DynamicMessage` instances (would fail cast to concrete type)
-     - If found: delegates to `GeneratedEncoder.writeFields()` → **codegen path** (done)
+     - If found: delegates to `GeneratedEncoder.writeFields()` → **codegen path**
+       - Nested messages call other encoders directly via `INSTANCE.writeFields()` (no registry)
+       - Timestamp/Duration fields call `writeTimestampDirect()`/`writeDurationDirect()`
+       - Enum fields use pre-cached `String[]` name arrays
+     - (done — never falls through to generic path)
    - If no generated encoder: **generic path**:
      - Iterates cached `FieldInfo[]` array (no `getAllFields()` TreeMap)
      - For each field: checks presence/default, then calls `FieldWriter.writeValue()`

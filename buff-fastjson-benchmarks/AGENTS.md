@@ -3,23 +3,60 @@
 ## Module Purpose
 
 JMH benchmarks comparing `BuffJSON.encode()` against `JsonFormat.printer().print()`.
-Owns its own .proto definitions (simple_message.proto, complex_message.proto) for benchmark messages.
+Owns its own .proto definitions for benchmark messages.
 
 ## Benchmarks — Three-Way Comparison
 
-Each benchmark class has three methods:
+Each benchmark class has up to 6 methods (constant + random variants × 3 encoders):
 
-- `buffJsonCodegen()` — `BuffJSON.encode()` with generated encoders (codegen path)
-- `buffJson()` — `GENERIC_ENCODER.encode()` with `withGeneratedEncoders(false)` (generic path)
-- `protoJsonFormat()` — `JsonFormat.printer().print()` (baseline)
+- `buffJsonCodegen()` / `buffJsonCodegenRandom()` — codegen path
+- `buffJson()` / `buffJsonRandom()` — generic path (with `withGeneratedEncoders(false)`)
+- `protoJsonFormat()` / `protoJsonFormatRandom()` — `JsonFormat.printer().print()` (baseline)
 
-Files:
+Random variants use a 1024-element message pool (`index++ & MASK` cycling).
 
-- `BenchmarkData.java` — Factory creating deterministic SimpleMessage and ComplexMessage instances
-- `SimpleMessageBenchmark.java` — Throughput comparison on flat 6-field message
-- `ComplexMessageBenchmark.java` — Throughput comparison on nested/maps/repeated message
+## Benchmark Classes
 
-Run: `java -jar target/benchmarks.jar -wi 3 -i 5 -f 2`
+|              Class              |                             Message                             |          Focus          |
+|---------------------------------|-----------------------------------------------------------------|-------------------------|
+| `SimpleMessageBenchmark`        | 6-field flat message (string, int32, int64, double, bool, enum) | Scalar baseline         |
+| `ComplexMessageBenchmark`       | Nested, maps, repeated, oneof, bytes, timestamps, enum          | Full-featured message   |
+| `AllScalarsBenchmark`           | All 15 proto3 scalar types + enum                               | Type coverage           |
+| `WktBenchmark`                  | Timestamp, Duration, Wrappers, Struct (4 sub-scenarios)         | Well-known types        |
+| `AnyBenchmark`                  | Any containing scalars message + Any containing Timestamp       | Type resolution         |
+| `RepeatedAndMapBenchmark`       | 100+ repeated elements, 50+ map entries                         | Collection stress       |
+| `DeepNestingAndStringBenchmark` | 5-level recursive nesting + unicode/escape strings              | Nesting + string stress |
+| `SimpleMessagePojoBenchmark`    | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison      |
+| `ComplexMessagePojoBenchmark`   | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison      |
+
+## Running Benchmarks
+
+```bash
+# Full suite with report generation
+./run-benchmarks.sh
+
+# Specific benchmark subset
+./run-benchmarks.sh "ComplexMessage"
+
+# Custom JMH args
+./run-benchmarks.sh "ComplexMessage" -wi 3 -i 5 -f 2
+```
+
+`run-benchmarks.sh` rebuilds the project (`mvn package -DskipTests`), runs JMH, and generates:
+- `benchmark-reports/<timestamp>-raw.txt` — full JMH console output
+- `benchmark-reports/<timestamp>-results.json` — machine-readable JSON
+- `benchmark-reports/<timestamp>-report.md` — markdown report with codegen/generic/JsonFormat comparison table
+
+## Proto Files
+
+- `simple_message.proto` — SimpleMessage + Status enum
+- `complex_message.proto` — Address, Tag, ComplexMessage (nested, maps, repeated, oneof, bytes, timestamps)
+- `benchmark_stress.proto` — BenchAllScalars, BenchRepeatedHeavy, BenchMapHeavy, BenchDeepNesting, BenchStringHeavy, BenchAny
+- `benchmark_wkt.proto` — BenchTimestamps, BenchDurations, BenchWrappers, BenchStruct
+
+## POJO Baselines
+
+`SimpleMessagePojoBenchmark` and `ComplexMessagePojoBenchmark` serialize plain Java POJOs with fastjson2 to establish the ceiling for serialization speed. The POJO has pre-formatted data (timestamps as strings, base64 payload as string, enum as string), so the gap between codegen and POJO represents inherent protobuf overhead.
 
 ## Build Gotchas
 

@@ -80,12 +80,22 @@ public final class FieldWriter {
 			}
 			case ENUM -> {
 				if (value instanceof EnumValueDescriptor enumValue) {
-					jsonWriter.writeString(enumValue.getName());
+					// Unrecognized values are written as integers per proto3 JSON spec.
+					// Detect them by checking if the number maps to a known value.
+					if (fd.getEnumType().findValueByNumber(enumValue.getNumber()) != null) {
+						jsonWriter.writeString(enumValue.getName());
+					} else {
+						jsonWriter.writeInt32(enumValue.getNumber());
+					}
 				} else {
-					// Map values may return Integer for enum fields
+					// Map values may return Integer for enum fields.
 					int enumNumber = (int) value;
 					var enumDesc = fd.getEnumType().findValueByNumber(enumNumber);
-					jsonWriter.writeString(enumDesc != null ? enumDesc.getName() : String.valueOf(enumNumber));
+					if (enumDesc != null) {
+						jsonWriter.writeString(enumDesc.getName());
+					} else {
+						jsonWriter.writeInt32(enumNumber);
+					}
 				}
 			}
 			case MESSAGE -> {

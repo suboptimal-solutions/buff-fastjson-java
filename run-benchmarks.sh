@@ -39,11 +39,7 @@ REPORT_FILE="${REPORTS_DIR}/${TIMESTAMP}-report.md"
 
 # Always clean-rebuild to pick up code changes and regenerate JMH BenchmarkList.
 echo "Building benchmarks..."
-mvn package -pl buff-fastjson-benchmarks -am -q
-if ! mvn package -pl buff-fastjson-benchmarks -am -DskipTests; then
-    echo "ERROR: Maven build failed. Fix compilation errors and retry."
-    exit 1
-fi
+mvn package -DskipTests -q
 
 mkdir -p "$REPORTS_DIR"
 

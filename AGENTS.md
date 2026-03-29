@@ -19,14 +19,22 @@ BuffJSON.encode(message)
         -> ProtobufMessageWriter.writeFields()
           -> GeneratedEncoderRegistry.get()    # check for codegen encoder (ServiceLoader)
              -> if found: GeneratedEncoder.writeFields()   # direct typed accessors, no boxing
+                -> nested messages: OtherEncoder.INSTANCE.writeFields()  # direct, no registry
+                -> WKT Timestamp/Duration: writeTimestampDirect(seconds, nanos)  # no reflection
              -> if not:   generic path (MessageSchema + FieldWriter)  # reflection-style getField()
 ```
 
-**Codegen path** (optional, ~2x faster): protoc plugin generates `*JsonEncoder` per message.
+**Codegen path** (optional, ~2-3x faster): protoc plugin generates `*JsonEncoder` per message.
 Each encoder calls typed getters directly (`msg.getId()` → `int`), eliminating:
 - `message.getField(fd)` reflection + boxing
 - `switch (fd.getJavaType())` runtime dispatch
 - `ConcurrentHashMap.get()` for MessageSchema lookup
+
+Additional codegen optimizations:
+- **Direct nested encoder calls** — `AddressJsonEncoder.INSTANCE.writeFields()` instead of routing through `ProtobufMessageWriter` (avoids ThreadLocal read + ConcurrentHashMap lookup + instanceof check per nested message)
+- **Inline WKT Timestamp/Duration** — `WellKnownTypes.writeTimestampDirect(jsonWriter, ts.getSeconds(), ts.getNanos())` bypasses descriptor string switch, field cache lookup, and `getField()` reflection+boxing
+- **Pre-cached enum name arrays** — static `String[]` built at class init from enum descriptor values, replaces `forNumber()` + `getValueDescriptor().getName()` per write
+- **String map key optimization** — avoids redundant `toString()` for String-typed map keys
 
 **Generic path** (always available): iterates cached `FieldInfo[]`, dispatches by `JavaType`.
 Still ~4-5x faster than `JsonFormat` due to schema caching and fastjson2 buffer reuse.

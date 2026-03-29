@@ -26,10 +26,13 @@ Uses [Alibaba fastjson2](https://github.com/alibaba/fastjson2) as the JSON writi
 - **Pre-computed field name chars** for `writeNameRaw()` — avoids per-field string encoding
 - **fastjson2 ThreadLocal buffer reuse** eliminates per-call allocations
 
-**Codegen path** (optional protoc plugin, ~2x additional speedup):
+**Codegen path** (optional protoc plugin, ~2-3x additional speedup):
 - **Direct typed accessors** — `message.getId()` returns `int`, no boxing
 - **No runtime type dispatch** — each field's encoding logic is inlined at compile time
 - **No schema cache lookup** — field iteration order and names are hardcoded
+- **Direct nested encoder calls** — nested messages call `INSTANCE.writeFields()` directly, bypassing the runtime registry
+- **Inline WKT Timestamp/Duration** — typed accessor calls (`ts.getSeconds()`, `ts.getNanos()`) bypass descriptor lookup and reflection
+- **Pre-cached enum names** — static `String[]` array lookup, no `forNumber()` or descriptor calls
 
 Inspired by [fastjson2](https://github.com/alibaba/fastjson2) and [buffa](https://github.com/anthropics/buffa).
 
@@ -127,18 +130,20 @@ mvn clean install
 ## Running Benchmarks
 
 ```bash
-# Full benchmark run (2 forks, 5 warmup + 5 measurement iterations)
-java -jar buff-fastjson-benchmarks/target/benchmarks.jar
+# Full suite — builds, runs JMH, generates markdown report
+./run-benchmarks.sh
 
-# Quick sanity check
+# Specific benchmark subset
+./run-benchmarks.sh "ComplexMessage"
+
+# Custom JMH args
+./run-benchmarks.sh "SimpleMessage" -wi 3 -i 5 -f 2
+
+# Direct JMH (after mvn package)
 java -jar buff-fastjson-benchmarks/target/benchmarks.jar -wi 1 -i 1 -f 1
-
-# Specific benchmark
-java -jar buff-fastjson-benchmarks/target/benchmarks.jar SimpleMessageBenchmark
-
-# With GC profiling
-java -jar buff-fastjson-benchmarks/target/benchmarks.jar -prof gc
 ```
+
+Reports are written to `benchmark-reports/` with raw output, JSON data, and markdown report.
 
 ## Running Tests
 

@@ -13,6 +13,7 @@ import io.suboptimal.buffjson.proto.*;
 class Proto3JsonConformanceTest {
 
 	private static final JsonFormat.Printer REFERENCE = JsonFormat.printer().omittingInsignificantWhitespace();
+	private static final Encoder CODEGEN_ENCODER = BuffJSON.encoder().withGeneratedEncoders(true);
 	private static final Encoder GENERIC_ENCODER = BuffJSON.encoder().withGeneratedEncoders(false);
 
 	private void assertMatchesReference(Message message) throws Exception {
@@ -20,7 +21,7 @@ class Proto3JsonConformanceTest {
 		String typeName = message.getDescriptorForType().getFullName();
 
 		// Test codegen path (uses generated encoders if available)
-		String codegen = BuffJSON.encode(message);
+		String codegen = CODEGEN_ENCODER.encode(message);
 		assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
 
 		// Test generic path (reflection-based, no generated encoders)
@@ -173,6 +174,34 @@ class Proto3JsonConformanceTest {
 		void repeatedEnums() throws Exception {
 			assertMatchesReference(TestNesting.newBuilder().addRepeatedEnum(TestEnum.TEST_ENUM_FOO)
 					.addRepeatedEnum(TestEnum.TEST_ENUM_BAR).addRepeatedEnum(TestEnum.TEST_ENUM_BAZ).build());
+		}
+
+		@Test
+		void unrecognizedEnumValue() throws Exception {
+			// Set enum field to a value not defined in TestEnum (e.g. 999)
+			// Proto3 JSON spec: unrecognized enum values are written as integers
+			assertMatchesReference(TestNesting.newBuilder().setEnumValueValue(999).build());
+		}
+
+		@Test
+		void unrecognizedEnumInOneof() throws Exception {
+			assertMatchesReference(TestOneof.newBuilder().setEnumValueValue(999).build());
+		}
+
+		@Test
+		void unrecognizedEnumInRepeated() throws Exception {
+			// Mix recognized and unrecognized values
+			TestNesting msg = TestNesting.newBuilder().addRepeatedEnumValue(1) // TEST_ENUM_FOO
+					.addRepeatedEnumValue(999) // unrecognized
+					.addRepeatedEnumValue(2) // TEST_ENUM_BAR
+					.build();
+			assertMatchesReference(msg);
+		}
+
+		@Test
+		void unrecognizedEnumWithExplicitPresence() throws Exception {
+			// optional enum field with unrecognized value — should serialize with presence
+			assertMatchesReference(TestOptionalFields.newBuilder().setOptionalEnumValue(999).build());
 		}
 	}
 
@@ -661,6 +690,59 @@ class Proto3JsonConformanceTest {
 		@Test
 		void emptyTestNesting() throws Exception {
 			assertMatchesReference(TestNesting.getDefaultInstance());
+		}
+	}
+
+	// =========================================================================
+	// External messages (no generated encoders — exercises generic fallback)
+	// =========================================================================
+	@Nested
+	class ExternalMessages {
+
+		@Test
+		void googleTypeMoney() throws Exception {
+			assertMatchesReference(
+					com.google.type.Money.newBuilder().setCurrencyCode("USD").setUnits(42).setNanos(990000000).build());
+		}
+
+		@Test
+		void googleTypeDate() throws Exception {
+			assertMatchesReference(com.google.type.Date.newBuilder().setYear(2026).setMonth(3).setDay(30).build());
+		}
+
+		@Test
+		void googleTypeInterval() throws Exception {
+			// Interval has nested Timestamp fields — tests that WKT handling works
+			// when the outer message has no generated encoder
+			assertMatchesReference(com.google.type.Interval.newBuilder()
+					.setStartTime(Timestamp.newBuilder().setSeconds(1711627200).setNanos(123000000))
+					.setEndTime(Timestamp.newBuilder().setSeconds(1711713600).setNanos(0)).build());
+		}
+
+		@Test
+		void googleTypeLatLng() throws Exception {
+			assertMatchesReference(
+					com.google.type.LatLng.newBuilder().setLatitude(37.7749).setLongitude(-122.4194).build());
+		}
+
+		@Test
+		void googleTypeColor() throws Exception {
+			assertMatchesReference(com.google.type.Color.newBuilder().setRed(0.8f).setGreen(0.2f).setBlue(0.5f)
+					.setAlpha(com.google.protobuf.FloatValue.of(1.0f)).build());
+		}
+
+		@Test
+		void googleTypePostalAddress() throws Exception {
+			assertMatchesReference(com.google.type.PostalAddress.newBuilder().setRegionCode("US").setPostalCode("94105")
+					.setLocality("San Francisco").setAdministrativeArea("CA").addAddressLines("123 Main St")
+					.addAddressLines("Suite 100").build());
+		}
+
+		@Test
+		void emptyExternalMessages() throws Exception {
+			assertMatchesReference(com.google.type.Money.getDefaultInstance());
+			assertMatchesReference(com.google.type.Interval.getDefaultInstance());
+			assertMatchesReference(com.google.type.PostalAddress.getDefaultInstance());
 		}
 	}
 }

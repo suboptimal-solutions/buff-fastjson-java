@@ -23,9 +23,11 @@ Standard protoc plugin protocol: reads `CodeGeneratorRequest` from stdin, writes
 For each non-WKT, non-map-entry message type:
 
 1. A `FooJsonEncoder.java` class implementing `GeneratedEncoder<Foo>`
-2. Pre-computed `char[] NAME_*` constants for each field (format: `"fieldName":`)
-3. A `writeFields()` method with inlined per-field encoding logic
-4. A `META-INF/services/io.suboptimal.buffjson.GeneratedEncoder` file listing all encoders
+2. A `public static final INSTANCE` singleton for direct calls from other encoders
+3. Pre-computed `char[] NAME_*` constants for each field (format: `"fieldName":`)
+4. Pre-cached `String[] ENUM_*_NAMES` arrays for each enum type (built from enum descriptor at class init, avoiding `UNRECOGNIZED` which throws from `getNumber()`)
+5. A `writeFields()` method with inlined per-field encoding logic
+6. A `META-INF/services/io.suboptimal.buffjson.GeneratedEncoder` file listing all encoders
 
 ## Field Handling
 
@@ -37,13 +39,16 @@ For each non-WKT, non-map-entry message type:
 | int64 variants           | `writeString(Long.toString(...))`                                                  |
 | uint64/fixed64           | `writeString(Long.toUnsignedString(...))`                                          |
 | float/double             | Inline NaN/Infinity check                                                          |
-| Enum                     | `msg.getStatusValue()` + `Status.forNumber(ev)` + `getValueDescriptor().getName()` |
+| Enum                     | Static `ENUM_*_NAMES` array lookup by `msg.getStatusValue()` (no `forNumber()`)    |
 | bytes                    | `Base64.getEncoder().encodeToString(v.toByteArray())`                              |
 | Repeated                 | `msg.getFooList()`, check isEmpty, iterate                                         |
-| Map                      | `msg.getFooMap()`, check isEmpty, iterate entries                                  |
+| Map (String key)         | `msg.getFooMap()`, iterate, `entry.getKey()` directly (no `toString()`)            |
+| Map (non-String key)     | `msg.getFooMap()`, iterate, `entry.getKey().toString()`                            |
 | Oneof                    | `switch (msg.getFooCase())` with per-case typed accessor                           |
-| Nested message (non-WKT) | `ProtobufMessageWriter.INSTANCE.writeMessage(jsonWriter, nested)`                  |
+| Nested message (non-WKT) | `FooJsonEncoder.INSTANCE.writeFields()` — direct call, bypasses registry           |
 | Nested message (WKT)     | `WellKnownTypes.write(jsonWriter, nested)`                                         |
+| Timestamp                | `WellKnownTypes.writeTimestampDirect(jsonWriter, ts.getSeconds(), ts.getNanos())`  |
+| Duration                 | `WellKnownTypes.writeDurationDirect(jsonWriter, dur.getSeconds(), dur.getNanos())` |
 
 ## Name Resolution
 
@@ -51,6 +56,7 @@ For each non-WKT, non-map-entry message type:
 - Respects `java_package`, `java_multiple_files`, `java_outer_classname`
 - Nested messages use parent class as prefix: `Outer.Inner`
 - Encoder class names flatten nesting: `Outer_InnerJsonEncoder`
+- `protoToEncoderClass` mapping pre-computed for all messages in `filesToGenerate` so generated encoders can reference each other directly via `INSTANCE.writeFields()` (bypasses runtime registry)
 
 ## Important Edge Cases
 
@@ -58,6 +64,8 @@ For each non-WKT, non-map-entry message type:
 - **`DynamicMessage`** cannot use generated encoders (would fail cast) — guarded in `ProtobufMessageWriter`
 - **Map entry types** (`options.map_entry = true`) are skipped — they're synthetic
 - **`writeNameRaw(char[])`** must be used (not `byte[]`) — `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`
+- **Enum `UNRECOGNIZED`** — protobuf's generated `UNRECOGNIZED` constant throws `IllegalArgumentException` from `getNumber()`. Enum name arrays use `EnumDescriptor.getValues()` (not Java `.values()`) to avoid this
+- **Cross-file nested encoder calls** — `protoToEncoderClass` only contains messages from `filesToGenerate`. If a nested message is defined in a non-generated file, the fallback to `ProtobufMessageWriter.INSTANCE.writeMessage()` is used (which still finds the encoder at runtime via the registry)
 
 ## Build
 
