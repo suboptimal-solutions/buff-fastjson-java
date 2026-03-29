@@ -10,6 +10,7 @@ import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 
+import io.suboptimal.buffjson.benchmarks.pojo.*;
 import io.suboptimal.buffjson.proto.*;
 
 public final class BenchmarkData {
@@ -420,6 +421,110 @@ public final class BenchmarkData {
 			result[i] = BenchAny.newBuilder().setValue(Any.pack(ts)).build();
 		}
 		return result;
+	}
+
+	// ---- POJO factories (for fastjson2 raw comparison) ----
+
+	public static SimpleMessagePojo createSimpleMessagePojo() {
+		SimpleMessagePojo p = new SimpleMessagePojo();
+		p.setName("benchmark-user");
+		p.setId(42);
+		p.setTimestampMillis(1711627200000L);
+		p.setScore(99.95);
+		p.setActive(true);
+		p.setStatus("STATUS_ACTIVE");
+		return p;
+	}
+
+	public static SimpleMessagePojoCompiled createSimpleMessagePojoCompiled() {
+		SimpleMessagePojoCompiled p = new SimpleMessagePojoCompiled();
+		p.setName("benchmark-user");
+		p.setId(42);
+		p.setTimestampMillis(1711627200000L);
+		p.setScore(99.95);
+		p.setActive(true);
+		p.setStatus("STATUS_ACTIVE");
+		return p;
+	}
+
+	public static ComplexMessagePojo createComplexMessagePojo() {
+		AddressPojo primary = new AddressPojo();
+		primary.setStreet("123 Main St");
+		primary.setCity("Springfield");
+		primary.setState("IL");
+		primary.setZipCode("62704");
+		primary.setCountry("US");
+
+		AddressPojo secondary = new AddressPojo();
+		secondary.setStreet("456 Oak Ave");
+		secondary.setCity("Shelbyville");
+		secondary.setState("IL");
+		secondary.setZipCode("62565");
+		secondary.setCountry("US");
+
+		TagPojo tag1 = new TagPojo();
+		tag1.setKey("env");
+		tag1.setValue("prod");
+		TagPojo tag2 = new TagPojo();
+		tag2.setKey("region");
+		tag2.setValue("us-east");
+
+		ComplexMessagePojo p = new ComplexMessagePojo();
+		p.setId("msg-001");
+		p.setName("complex-benchmark");
+		p.setVersion(1);
+		p.setPrimaryAddress(primary);
+		p.setTagsList(java.util.List.of("java", "protobuf", "benchmark"));
+		p.setAddresses(java.util.List.of(primary, secondary));
+		p.setTags(java.util.List.of(tag1, tag2));
+		p.setMetadata(java.util.Map.of("version", "1.0", "format", "json", "encoding", "utf-8"));
+		p.setAddressBook(java.util.Map.of(1, primary));
+		p.setEmail("user@example.com");
+		p.setPayload("YmluYXJ5LXBheWxvYWQtZGF0YQ==");
+		p.setCreatedAt("2024-03-28T16:00:00Z");
+		p.setUpdatedAt("2024-03-28T16:00:00Z");
+		p.setStatus("STATUS_ACTIVE");
+		return p;
+	}
+
+	public static ComplexMessagePojoCompiled createComplexMessagePojoCompiled() {
+		AddressPojoCompiled primary = new AddressPojoCompiled();
+		primary.setStreet("123 Main St");
+		primary.setCity("Springfield");
+		primary.setState("IL");
+		primary.setZipCode("62704");
+		primary.setCountry("US");
+
+		AddressPojoCompiled secondary = new AddressPojoCompiled();
+		secondary.setStreet("456 Oak Ave");
+		secondary.setCity("Shelbyville");
+		secondary.setState("IL");
+		secondary.setZipCode("62565");
+		secondary.setCountry("US");
+
+		TagPojoCompiled tag1 = new TagPojoCompiled();
+		tag1.setKey("env");
+		tag1.setValue("prod");
+		TagPojoCompiled tag2 = new TagPojoCompiled();
+		tag2.setKey("region");
+		tag2.setValue("us-east");
+
+		ComplexMessagePojoCompiled p = new ComplexMessagePojoCompiled();
+		p.setId("msg-001");
+		p.setName("complex-benchmark");
+		p.setVersion(1);
+		p.setPrimaryAddress(primary);
+		p.setTagsList(java.util.List.of("java", "protobuf", "benchmark"));
+		p.setAddresses(java.util.List.of(primary, secondary));
+		p.setTags(java.util.List.of(tag1, tag2));
+		p.setMetadata(java.util.Map.of("version", "1.0", "format", "json", "encoding", "utf-8"));
+		p.setAddressBook(java.util.Map.of(1, primary));
+		p.setEmail("user@example.com");
+		p.setPayload("YmluYXJ5LXBheWxvYWQtZGF0YQ==");
+		p.setCreatedAt("2024-03-28T16:00:00Z");
+		p.setUpdatedAt("2024-03-28T16:00:00Z");
+		p.setStatus("STATUS_ACTIVE");
+		return p;
 	}
 
 	// ---- Helpers ----

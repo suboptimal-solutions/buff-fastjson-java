@@ -3,12 +3,15 @@ package io.suboptimal.buffjson.benchmarks;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import com.alibaba.fastjson2.JSON;
 import com.google.protobuf.util.JsonFormat;
 
 import org.openjdk.jmh.annotations.*;
 
 import io.suboptimal.buffjson.BuffJSON;
 import io.suboptimal.buffjson.Encoder;
+import io.suboptimal.buffjson.benchmarks.pojo.ComplexMessagePojo;
+import io.suboptimal.buffjson.benchmarks.pojo.ComplexMessagePojoCompiled;
 import io.suboptimal.buffjson.proto.ComplexMessage;
 
 @BenchmarkMode(Mode.Throughput)
@@ -26,12 +29,16 @@ public class ComplexMessageBenchmark {
 
 	private ComplexMessage message;
 	private ComplexMessage[] randomMessages;
+	private ComplexMessagePojo pojo;
+	private ComplexMessagePojoCompiled pojoCompiled;
 	private int index;
 
 	@Setup
 	public void setup() {
 		message = BenchmarkData.createComplexMessage();
 		randomMessages = BenchmarkData.createRandomComplexMessages(new Random(42), POOL_SIZE);
+		pojo = BenchmarkData.createComplexMessagePojo();
+		pojoCompiled = BenchmarkData.createComplexMessagePojoCompiled();
 	}
 
 	@Benchmark
@@ -62,5 +69,15 @@ public class ComplexMessageBenchmark {
 	@Benchmark
 	public String protoJsonFormatRandom() throws Exception {
 		return PROTO_PRINTER.print(randomMessages[index++ & MASK]);
+	}
+
+	@Benchmark
+	public String fastjson2Pojo() {
+		return JSON.toJSONString(pojo);
+	}
+
+	@Benchmark
+	public String fastjson2PojoCompiled() {
+		return JSON.toJSONString(pojoCompiled);
 	}
 }
