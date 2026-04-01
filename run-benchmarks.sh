@@ -14,6 +14,7 @@
 #   WktBenchmark               — Timestamp + Struct
 #   RepeatedAndMapBenchmark    — 100+ repeated, 50+ map entries
 #   CeilingBenchmark           — fastjson2 POJO ceiling vs BuffJSON
+#   ProtoBinaryBenchmark       — BuffJSON JSON vs protobuf binary encoding
 #
 # Full suite — adds these on top of regression:
 #   AllScalarsBenchmark        — all 15 proto3 scalar types + enum
@@ -68,7 +69,7 @@ if [ "$FULL_MODE" = false ]; then
         fi
     done
     if [ "$HAS_FILTER" = false ]; then
-        JMH_ARGS=("(SimpleMessage|ComplexMessage|Ceiling|Wkt|RepeatedAndMap)Benchmark" "${JMH_ARGS[@]}")
+        JMH_ARGS=("(SimpleMessage|ComplexMessage|Ceiling|Wkt|RepeatedAndMap|ProtoBinary)Benchmark" "${JMH_ARGS[@]}")
     fi
 fi
 
@@ -173,11 +174,39 @@ with open(report_file, "w") as f:
     def is_ceiling_class(class_name):
         return class_name == "CeilingBenchmark"
 
+    def is_proto_binary_class(class_name):
+        return class_name == "ProtoBinaryBenchmark"
+
 
     # Per-class analysis
     for class_name in sorted(groups.keys()):
         methods = groups[class_name]
         f.write(f"## {class_name}\n\n")
+
+        if is_proto_binary_class(class_name):
+            # Proto binary benchmark: compare BuffJSON JSON vs protobuf binary
+            by_key = {}
+            for m in methods:
+                by_key[m["method"]] = m
+
+            rows = [
+                ("simple encode", "simpleJsonEncode", "simpleBinaryEncode"),
+                ("simple decode", "simpleJsonDecode", "simpleBinaryDecode"),
+                ("complex encode", "complexJsonEncode", "complexBinaryEncode"),
+                ("complex decode", "complexJsonDecode", "complexBinaryDecode"),
+            ]
+
+            f.write("| | BuffJSON JSON | Protobuf Binary | JSON / Binary |\n")
+            f.write("|---|---:|---:|:---:|\n")
+            for label, json_key, bin_key in rows:
+                jm = by_key.get(json_key)
+                bm = by_key.get(bin_key)
+                ratio = ""
+                if jm and bm and bm["score"] > 0:
+                    ratio = f"**{jm['score'] / bm['score']:.2f}x**"
+                f.write(f"| {label} | {fmt(jm)} | {fmt(bm)} | {ratio} |\n")
+            f.write("\n")
+            continue
 
         if is_ceiling_class(class_name):
             # Ceiling benchmark: compare like-for-like (compiled vs compiled, runtime vs runtime)
@@ -330,6 +359,19 @@ with open(report_file, "w") as f:
         if "runtime_vs_jsonformat" in worst_r:
             f.write(f"- **Smallest runtime vs JsonFormat:** {worst_r['runtime_vs_jsonformat']:.1f}x "
                     f"({worst_r['class']}.{worst_r['method'].replace('Compiled','Runtime')})\n")
+
+    # Proto binary summary
+    pb_methods = groups.get("ProtoBinaryBenchmark", [])
+    if pb_methods:
+        pb_by_key = {m["method"]: m["score"] for m in pb_methods}
+        for label, jk, bk in [("Simple encode", "simpleJsonEncode", "simpleBinaryEncode"),
+                               ("Complex encode", "complexJsonEncode", "complexBinaryEncode"),
+                               ("Simple decode", "simpleJsonDecode", "simpleBinaryDecode"),
+                               ("Complex decode", "complexJsonDecode", "complexBinaryDecode")]:
+            js = pb_by_key.get(jk, 0)
+            bs = pb_by_key.get(bk, 0)
+            if js > 0 and bs > 0:
+                f.write(f"- **{label}: JSON / Binary:** {js / bs:.2f}x\n")
 
     # Ceiling summary
     ceiling_methods = groups.get("CeilingBenchmark", [])
