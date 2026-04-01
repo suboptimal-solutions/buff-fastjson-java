@@ -13,6 +13,8 @@
     <description>JMH benchmarks for buff-fastjson</description>
 
     <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
         <uberjar.name>benchmarks</uberjar.name>
     </properties>
 

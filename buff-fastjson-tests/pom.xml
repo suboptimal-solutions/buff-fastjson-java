@@ -12,6 +12,11 @@
     <name>buff-fastjson-tests</name>
     <description>Conformance tests for buff-fastjson</description>
 
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.alibaba.fastjson2</groupId>

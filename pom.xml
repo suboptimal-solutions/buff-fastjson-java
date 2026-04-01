@@ -18,6 +18,13 @@
         </license>
     </licenses>
 
+    <developers>
+        <developer>
+            <name>Dmitry Petrov</name>
+            <url>https://github.com/suboptimal-solutions</url>
+        </developer>
+    </developers>
+
     <modules>
         <module>buff-fastjson-core</module>
         <module>buff-fastjson-protoc-plugin</module>
@@ -25,13 +32,23 @@
         <module>buff-fastjson-benchmarks</module>
     </modules>
 
+    <scm>
+        <connection>scm:git:git://github.com/suboptimal-solutions/buff-fastjson-java.git</connection>
+        <developerConnection>scm:git:ssh://github.com:suboptimal-solutions/buff-fastjson-java.git</developerConnection>
+        <url>https://github.com/suboptimal-solutions/buff-fastjson-java</url>
+    </scm>
+
     <properties>
+        <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
         <fastjson2.version>2.0.61</fastjson2.version>
         <jackson-datatype-protobuf.version>0.9.18</jackson-datatype-protobuf.version>
         <jmh.version>1.37</jmh.version>
         <junit.version>5.11.4</junit.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+        <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
         <maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
+        <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <proto-google-common-protos.version>2.66.0</proto-google-common-protos.version>
@@ -176,4 +193,67 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <phase>verify</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
