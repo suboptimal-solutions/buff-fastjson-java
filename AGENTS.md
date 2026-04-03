@@ -4,7 +4,8 @@
 
 Fast protobuf-to-JSON serializer for Java using fastjson2 as the JSON writing engine.
 Up to ~10x faster than `JsonFormat.printer()` with the optional protoc plugin (~4-5x without).
-Serialization only (no deserialization yet). Proto3 JSON spec compliant, including all 16 well-known types.
+Proto3 JSON spec compliant, including all 16 well-known types.
+Includes JSON Schema generation from protobuf descriptors (separate module, no fastjson2 dependency).
 
 ## Architecture
 
@@ -93,17 +94,17 @@ String json = genericEncoder.encode(message);
 
 ## Module Layout
 
-- **buff-fastjson-core** — public API (`BuffJSON`, `Encoder`, `GeneratedEncoder`) + internal serialization
-- **buff-fastjson-protoc-plugin** — protoc plugin that generates `*JsonEncoder` per message type. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout.
-- **buff-fastjson-tests** — 84 conformance tests (each validates both codegen and generic paths) + own .proto definitions
+- **buff-fastjson-core** — public API (`BuffJSON`, `Encoder`, `Decoder`, `GeneratedEncoder`, `GeneratedDecoder`) + internal serialization/deserialization
+- **buff-fastjson-protoc-plugin** — protoc plugin that generates `*JsonEncoder` and `*JsonDecoder` per message type. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout.
+- **buff-protobuf-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends only on `protobuf-java` (no fastjson2). Single class: `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`.
+- **buff-fastjson-tests** — conformance tests (each validates both codegen and generic paths) + JSON Schema tests + own .proto definitions
 - **buff-fastjson-benchmarks** — JMH benchmarks (3-way: codegen vs generic vs JsonFormat) + own .proto definitions
 
-Build order in reactor: core → protoc-plugin → tests → benchmarks.
+Build order in reactor: core → protoc-plugin → schema → tests → benchmarks.
 Each consumer module (tests, benchmarks) configures the protoc plugin via ascopes `protobuf-maven-plugin` `<jvmPlugin>`.
 
 ## Not Yet Implemented
 
-- Deserialization (JSON -> protobuf)
 - Streaming / Appendable output
 - Proto2 support
 

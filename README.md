@@ -108,6 +108,24 @@ Decoder decoder = BuffJSON.decoder()
 MyMessage msg = decoder.decode(json, MyMessage.class);
 ```
 
+### JSON Schema generation
+
+Generate [JSON Schema (draft 2020-12)](https://json-schema.org/draft/2020-12/schema) from protobuf message descriptors. Useful for OpenAPI 3.1+, AsyncAPI 3.0+, and MCP tool definitions.
+
+Provided by the `buff-protobuf-schema` module — depends only on `protobuf-java`, no fastjson2 required.
+
+```java
+import io.suboptimal.buffjson.schema.ProtobufSchema;
+
+// From a Descriptor
+Map<String, Object> schema = ProtobufSchema.generate(MyMessage.getDescriptor());
+
+// From a Message class
+Map<String, Object> schema = ProtobufSchema.generate(MyMessage.class);
+```
+
+The schema reflects the [Proto3 JSON mapping](https://protobuf.dev/programming-guides/proto3/#json): int64 types become `{"type": "string"}`, Timestamp becomes `{"type": "string", "format": "date-time"}`, enums become `{"type": "string", "enum": [...]}`, etc. Recursive messages use `$defs`/`$ref`. Returns `Map<String, Object>` for portability — serialize with any JSON library or pass directly to schema-consuming tooling.
+
 ## Proto3 JSON Spec Compliance
 
 |                                                                  Feature                                                                  |  Status   |
@@ -171,18 +189,19 @@ mvn test
 
 ```
 buff-fastjson-java/
-  buff-fastjson-core/           # Library: BuffJSON.encode() API + internal serialization
-  buff-fastjson-protoc-plugin/  # Optional protoc plugin for generated encoders
+  buff-fastjson-core/           # Library: BuffJSON.encode()/decode() API + internal serialization
+  buff-fastjson-protoc-plugin/  # Optional protoc plugin for generated encoders/decoders
+  buff-protobuf-schema/         # JSON Schema generation from protobuf descriptors (no fastjson2 dep)
   buff-fastjson-tests/          # Conformance tests (both paths) + own .proto definitions
   buff-fastjson-benchmarks/     # JMH benchmarks (3-way comparison) + own .proto definitions
 ```
 
 ## Dependencies
 
-|             Dependency              | Version |                Purpose                 |
-|-------------------------------------|---------|----------------------------------------|
-| `com.google.protobuf:protobuf-java` | 4.34.1  | Protobuf runtime (Message, Descriptor) |
-| `com.alibaba.fastjson2:fastjson2`   | 2.0.61  | JSON writing engine                    |
+|             Dependency              | Version |                Purpose                 |      Module(s)       |
+|-------------------------------------|---------|----------------------------------------|----------------------|
+| `com.google.protobuf:protobuf-java` | 4.34.1  | Protobuf runtime (Message, Descriptor) | core, schema, plugin |
+| `com.alibaba.fastjson2:fastjson2`   | 2.0.61  | JSON writing engine                    | core                 |
 
 ## License
 

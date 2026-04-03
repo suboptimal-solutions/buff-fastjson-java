@@ -5,7 +5,7 @@
 Conformance tests verifying that `BuffJSON.encode()` produces output identical to
 `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all proto3 JSON features.
 
-## Test Structure — 84 tests total
+## Test Structure
 
 - `BuffJSONTest.java` — 3 smoke tests (scalar, default, complex messages)
 - `Proto3JsonConformanceTest.java` — 81 tests in 16 nested classes:
@@ -51,9 +51,29 @@ are produced alongside standard protobuf sources. A `<resources>` entry copies t
 
 - `conformance_test.proto` — comprehensive proto3 test messages including TestAny, TestEmpty
 
+### JSON Schema Tests
+
+- `ProtobufSchemaTest.java` — 15 tests covering `ProtobufSchema.generate()`:
+  - allScalarTypes: all 15 scalar types mapped to correct JSON Schema types
+  - repeatedScalars: repeated fields → array with items
+  - nestedMessages: nested objects, repeated nested, enums
+  - recursiveMessages: $defs/$ref for self-referential types
+  - oneofFields: all oneof variants in properties
+  - mapFields: string/int/message map values → additionalProperties
+  - wrapperTypes: all 9 wrapper types unwrapped
+  - timestampType: Timestamp → string with date-time format
+  - durationType: Duration → string
+  - fieldMaskType: FieldMask → string
+  - structValueListValue: Struct/Value/ListValue → object/any/array
+  - anyType: Any → object with required @type
+  - emptyType: Empty → object
+  - customJsonName: json_name annotation used as property key
+  - generateFromClass: Class-based API convenience method
+
 ## Dependencies
 
 - `buff-fastjson-core` — the library under test
+- `buff-protobuf-schema` — JSON Schema generation under test
 - `protobuf-java-util` — reference `JsonFormat.printer()` for comparison
 - `junit-jupiter` — test framework
 

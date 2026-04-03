@@ -1,0 +1,298 @@
+package io.suboptimal.buffjson;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+
+import io.suboptimal.buffjson.proto.*;
+import io.suboptimal.buffjson.schema.ProtobufSchema;
+
+class ProtobufSchemaTest {
+
+	@Test
+	void allScalarTypes() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestAllScalars.getDescriptor());
+
+		assertEquals("https://json-schema.org/draft/2020-12/schema", schema.get("$schema"));
+		assertEquals("object", schema.get("type"));
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		assertNotNull(props);
+
+		// int32, sint32, sfixed32 → integer
+		assertEquals(Map.of("type", "integer"), props.get("optionalInt32"));
+		assertEquals(Map.of("type", "integer"), props.get("optionalSint32"));
+		assertEquals(Map.of("type", "integer"), props.get("optionalSfixed32"));
+
+		// uint32, fixed32 → integer with minimum 0
+		assertIntegerWithMinZero(props.get("optionalUint32"));
+		assertIntegerWithMinZero(props.get("optionalFixed32"));
+
+		// int64, sint64, sfixed64, uint64, fixed64 → string (proto3 JSON quotes 64-bit)
+		assertEquals(Map.of("type", "string"), props.get("optionalInt64"));
+		assertEquals(Map.of("type", "string"), props.get("optionalSint64"));
+		assertEquals(Map.of("type", "string"), props.get("optionalSfixed64"));
+		assertEquals(Map.of("type", "string"), props.get("optionalUint64"));
+		assertEquals(Map.of("type", "string"), props.get("optionalFixed64"));
+
+		// float, double → oneOf [number, string enum]
+		assertFloatSchema(props.get("optionalFloat"));
+		assertFloatSchema(props.get("optionalDouble"));
+
+		// bool → boolean
+		assertEquals(Map.of("type", "boolean"), props.get("optionalBool"));
+
+		// string → string
+		assertEquals(Map.of("type", "string"), props.get("optionalString"));
+
+		// bytes → string (base64)
+		assertEquals(Map.of("type", "string"), props.get("optionalBytes"));
+	}
+
+	@Test
+	void repeatedScalars() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestRepeatedScalars.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		// repeated int32 → array of integer
+		assertArrayOf(props.get("repeatedInt32"), Map.of("type", "integer"));
+
+		// repeated string → array of string
+		assertArrayOf(props.get("repeatedString"), Map.of("type", "string"));
+
+		// repeated bool → array of boolean
+		assertArrayOf(props.get("repeatedBool"), Map.of("type", "boolean"));
+	}
+
+	@Test
+	void nestedMessages() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestNesting.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		// nested message
+		@SuppressWarnings("unchecked")
+		Map<String, Object> nestedSchema = (Map<String, Object>) props.get("nested");
+		assertEquals("object", nestedSchema.get("type"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> nestedProps = (Map<String, Object>) nestedSchema.get("properties");
+		assertEquals(Map.of("type", "integer"), nestedProps.get("value"));
+		assertEquals(Map.of("type", "string"), nestedProps.get("name"));
+
+		// repeated nested → array of objects
+		@SuppressWarnings("unchecked")
+		Map<String, Object> repeatedNested = (Map<String, Object>) props.get("repeatedNested");
+		assertEquals("array", repeatedNested.get("type"));
+
+		// enum field
+		@SuppressWarnings("unchecked")
+		Map<String, Object> enumSchema = (Map<String, Object>) props.get("enumValue");
+		assertEquals("string", enumSchema.get("type"));
+		assertEquals(List.of("TEST_ENUM_UNSPECIFIED", "TEST_ENUM_FOO", "TEST_ENUM_BAR", "TEST_ENUM_BAZ"),
+				enumSchema.get("enum"));
+	}
+
+	@Test
+	void recursiveMessages() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestRecursive.getDescriptor());
+
+		// Should have $defs for the recursive type
+		assertNotNull(schema.get("$defs"), "Recursive message should produce $defs");
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> defs = (Map<String, Object>) schema.get("$defs");
+		assertTrue(defs.containsKey("io.suboptimal.buffjson.proto.TestRecursive"));
+
+		// Root should be a $ref
+		assertEquals("#/$defs/io.suboptimal.buffjson.proto.TestRecursive", schema.get("$ref"));
+	}
+
+	@Test
+	void oneofFields() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestOneof.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		// All oneof variants should be in properties
+		assertNotNull(props.get("intValue"));
+		assertNotNull(props.get("stringValue"));
+		assertNotNull(props.get("boolValue"));
+		assertNotNull(props.get("messageValue"));
+		assertNotNull(props.get("enumValue"));
+		// Plus the non-oneof field
+		assertNotNull(props.get("name"));
+	}
+
+	@Test
+	void mapFields() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestMaps.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		// map<string, string> → object with additionalProperties: string
+		assertMapOf(props.get("stringToString"), Map.of("type", "string"));
+
+		// map<string, int32> → object with additionalProperties: integer
+		assertMapOf(props.get("stringToInt32"), Map.of("type", "integer"));
+
+		// map<string, NestedMessage> → object with additionalProperties: object
+		@SuppressWarnings("unchecked")
+		Map<String, Object> msgMap = (Map<String, Object>) props.get("stringToMessage");
+		assertEquals("object", msgMap.get("type"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> addlProps = (Map<String, Object>) msgMap.get("additionalProperties");
+		assertEquals("object", addlProps.get("type"));
+	}
+
+	@Test
+	void wrapperTypes() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestWrappers.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		assertEquals(Map.of("type", "integer"), props.get("int32Value"));
+		assertIntegerWithMinZero(props.get("uint32Value"));
+		assertEquals(Map.of("type", "string"), props.get("int64Value"));
+		assertEquals(Map.of("type", "string"), props.get("uint64Value"));
+		assertFloatSchema(props.get("floatValue"));
+		assertFloatSchema(props.get("doubleValue"));
+		assertEquals(Map.of("type", "boolean"), props.get("boolValue"));
+		assertEquals(Map.of("type", "string"), props.get("stringValue"));
+		assertEquals(Map.of("type", "string"), props.get("bytesValue"));
+	}
+
+	@Test
+	void timestampType() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestTimestamp.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
+		assertEquals("string", valueSchema.get("type"));
+		assertEquals("date-time", valueSchema.get("format"));
+	}
+
+	@Test
+	void durationType() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestDuration.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		assertEquals(Map.of("type", "string"), props.get("value"));
+	}
+
+	@Test
+	void fieldMaskType() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestFieldMask.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		assertEquals(Map.of("type", "string"), props.get("value"));
+	}
+
+	@Test
+	void structValueListValue() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestStruct.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+
+		// Struct → object
+		assertEquals(Map.of("type", "object"), props.get("structValue"));
+
+		// Value → {} (any)
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
+		assertTrue(valueSchema.isEmpty() || !valueSchema.containsKey("type"),
+				"Value should be empty schema (any type)");
+
+		// ListValue → array
+		assertEquals(Map.of("type", "array"), props.get("listValue"));
+	}
+
+	@Test
+	void anyType() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestAny.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> anySchema = (Map<String, Object>) props.get("value");
+		assertEquals("object", anySchema.get("type"));
+		assertEquals(List.of("@type"), anySchema.get("required"));
+	}
+
+	@Test
+	void emptyType() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestEmpty.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		assertEquals(Map.of("type", "object"), props.get("value"));
+	}
+
+	@Test
+	void customJsonName() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestCustomJsonName.getDescriptor());
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
+		// Custom JSON names should be used as property keys
+		assertNotNull(props.get("@value"));
+		assertNotNull(props.get("Name"));
+	}
+
+	@Test
+	void generateFromClass() {
+		Map<String, Object> schema = ProtobufSchema.generate(TestAllScalars.class);
+		assertEquals("https://json-schema.org/draft/2020-12/schema", schema.get("$schema"));
+		assertEquals("object", schema.get("type"));
+		assertNotNull(schema.get("properties"));
+	}
+
+	// --- assertion helpers ---
+
+	@SuppressWarnings("unchecked")
+	private void assertFloatSchema(Object schema) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		List<Object> oneOf = (List<Object>) s.get("oneOf");
+		assertNotNull(oneOf, "float/double should use oneOf");
+		assertEquals(2, oneOf.size());
+		assertEquals(Map.of("type", "number"), oneOf.get(0));
+		Map<String, Object> strEnum = (Map<String, Object>) oneOf.get(1);
+		assertEquals("string", strEnum.get("type"));
+		assertEquals(List.of("NaN", "Infinity", "-Infinity"), strEnum.get("enum"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertArrayOf(Object schema, Map<String, Object> expectedItems) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		assertEquals("array", s.get("type"));
+		assertEquals(expectedItems, s.get("items"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertMapOf(Object schema, Map<String, Object> expectedValueSchema) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		assertEquals("object", s.get("type"));
+		assertEquals(expectedValueSchema, s.get("additionalProperties"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertIntegerWithMinZero(Object schema) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		assertEquals("integer", s.get("type"));
+		assertEquals(0, s.get("minimum"));
+	}
+}

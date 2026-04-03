@@ -28,6 +28,7 @@
     <modules>
         <module>buff-fastjson-core</module>
         <module>buff-fastjson-protoc-plugin</module>
+        <module>buff-protobuf-schema</module>
         <module>buff-fastjson-tests</module>
         <module>buff-fastjson-benchmarks</module>
     </modules>
@@ -87,6 +88,11 @@
             <dependency>
                 <groupId>io.github.suboptimal-solutions</groupId>
                 <artifactId>buff-fastjson-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.suboptimal-solutions</groupId>
+                <artifactId>buff-protobuf-schema</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
