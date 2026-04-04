@@ -29,6 +29,15 @@ Walks the protobuf `Descriptor` tree and maps each field to its Proto3 JSON Sche
    Each maps to its canonical JSON Schema form (e.g., Timestamp → `{"type": "string", "format": "date-time"}`).
 6. **Root schema**: Gets `"$schema": "https://json-schema.org/draft/2020-12/schema"` and
    `"$defs"` if any recursive types were encountered.
+7. **Metadata enrichment**:
+   - `title` on messages (from `descriptor.getName()`) and enums (from `enumDesc.getName()`)
+   - `description` on WKTs with format info (e.g., Duration: "Signed seconds with up to 9 fractional digits, suffixed with 's'.")
+   - `description` from proto comments when source code info is available (requires `protoc --include_source_info`)
+   - `format` hints: `"int64"` / `"uint64"` on 64-bit string fields, `"date-time"` on Timestamp
+   - `contentEncoding: "base64"` on bytes / BytesValue fields
+8. **Comment extraction**: Builds a path→comment index per `FileDescriptor` (cached in `IdentityHashMap`).
+   Uses protobuf's SourceCodeInfo path encoding to locate leading comments for messages, fields, and enums.
+   Gracefully returns null when source code info is not available (default protoc behavior).
 
 ## Proto3 JSON → JSON Schema Type Mapping
 
@@ -36,12 +45,13 @@ Walks the protobuf `Descriptor` tree and maps each field to its Proto3 JSON Sche
 
 - int32, sint32, sfixed32 → `{"type": "integer"}`
 - uint32, fixed32 → `{"type": "integer", "minimum": 0}`
-- int64, sint64, sfixed64, uint64, fixed64 → `{"type": "string"}` (proto3 JSON quotes 64-bit)
+- int64, sint64, sfixed64 → `{"type": "string", "format": "int64"}`
+- uint64, fixed64 → `{"type": "string", "format": "uint64"}`
 - float, double → `{"oneOf": [{"type": "number"}, {"type": "string", "enum": ["NaN", "Infinity", "-Infinity"]}]}`
 - bool → `{"type": "boolean"}`
 - string → `{"type": "string"}`
-- bytes → `{"type": "string"}` (base64 in proto3 JSON)
-- enum → `{"type": "string", "enum": ["VALUE1", ...]}`
+- bytes → `{"type": "string", "contentEncoding": "base64"}`
+- enum → `{"type": "string", "title": "EnumName", "enum": ["VALUE1", ...]}`
 
 ### Composites
 
@@ -51,16 +61,21 @@ Walks the protobuf `Descriptor` tree and maps each field to its Proto3 JSON Sche
 
 ### Well-Known Types
 
-- Timestamp → `{"type": "string", "format": "date-time"}`
-- Duration, FieldMask → `{"type": "string"}`
-- Struct → `{"type": "object"}`
-- Value → `{}` (any)
-- ListValue → `{"type": "array"}`
-- Any → `{"type": "object", "properties": {"@type": {"type": "string"}}, "required": ["@type"]}`
-- Wrappers (Int32Value, etc.) → unwrapped to their JSON primitive schema
+- Timestamp → `{"type": "string", "format": "date-time", "description": "RFC 3339 date-time format."}`
+- Duration → `{"type": "string", "description": "Signed seconds with up to 9 fractional digits, suffixed with 's'."}`
+- FieldMask → `{"type": "string", "description": "Comma-separated camelCase field paths."}`
+- Struct → `{"type": "object", "description": "Arbitrary JSON object."}`
+- Value → `{"description": "Arbitrary JSON value."}` (any)
+- ListValue → `{"type": "array", "description": "JSON array of arbitrary values."}`
+- Any → `{"type": "object", ..., "description": "Arbitrary message identified by a type URL in @type."}`
+- Int32Value → `{"type": "integer"}`, UInt32Value → `{"type": "integer", "minimum": 0}`
+- Int64Value → `{"type": "string", "format": "int64"}`, UInt64Value → `{"type": "string", "format": "uint64"}`
+- FloatValue, DoubleValue → float oneOf schema
+- BoolValue → `{"type": "boolean"}`, StringValue → `{"type": "string"}`
+- BytesValue → `{"type": "string", "contentEncoding": "base64"}`
 - Empty → `{"type": "object"}`
 
 ## Dependencies
 
-- `com.google.protobuf:protobuf-java` (provided) — Descriptor, FieldDescriptor, EnumDescriptor, Message
+- `com.google.protobuf:protobuf-java` (provided) — Descriptor, FieldDescriptor, EnumDescriptor, FileDescriptor, DescriptorProtos, SourceCodeInfo, Message
 

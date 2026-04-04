@@ -18,6 +18,7 @@ class ProtobufSchemaTest {
 
 		assertEquals("https://json-schema.org/draft/2020-12/schema", schema.get("$schema"));
 		assertEquals("object", schema.get("type"));
+		assertEquals("TestAllScalars", schema.get("title"));
 
 		@SuppressWarnings("unchecked")
 		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
@@ -32,12 +33,14 @@ class ProtobufSchemaTest {
 		assertIntegerWithMinZero(props.get("optionalUint32"));
 		assertIntegerWithMinZero(props.get("optionalFixed32"));
 
-		// int64, sint64, sfixed64, uint64, fixed64 → string (proto3 JSON quotes 64-bit)
-		assertEquals(Map.of("type", "string"), props.get("optionalInt64"));
-		assertEquals(Map.of("type", "string"), props.get("optionalSint64"));
-		assertEquals(Map.of("type", "string"), props.get("optionalSfixed64"));
-		assertEquals(Map.of("type", "string"), props.get("optionalUint64"));
-		assertEquals(Map.of("type", "string"), props.get("optionalFixed64"));
+		// int64, sint64, sfixed64 → string with format int64
+		assertStringWithFormat(props.get("optionalInt64"), "int64");
+		assertStringWithFormat(props.get("optionalSint64"), "int64");
+		assertStringWithFormat(props.get("optionalSfixed64"), "int64");
+
+		// uint64, fixed64 → string with format uint64
+		assertStringWithFormat(props.get("optionalUint64"), "uint64");
+		assertStringWithFormat(props.get("optionalFixed64"), "uint64");
 
 		// float, double → oneOf [number, string enum]
 		assertFloatSchema(props.get("optionalFloat"));
@@ -49,8 +52,8 @@ class ProtobufSchemaTest {
 		// string → string
 		assertEquals(Map.of("type", "string"), props.get("optionalString"));
 
-		// bytes → string (base64)
-		assertEquals(Map.of("type", "string"), props.get("optionalBytes"));
+		// bytes → string with contentEncoding base64
+		assertBytesSchema(props.get("optionalBytes"));
 	}
 
 	@Test
@@ -77,10 +80,11 @@ class ProtobufSchemaTest {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
 
-		// nested message
+		// nested message has title
 		@SuppressWarnings("unchecked")
 		Map<String, Object> nestedSchema = (Map<String, Object>) props.get("nested");
 		assertEquals("object", nestedSchema.get("type"));
+		assertEquals("NestedMessage", nestedSchema.get("title"));
 		@SuppressWarnings("unchecked")
 		Map<String, Object> nestedProps = (Map<String, Object>) nestedSchema.get("properties");
 		assertEquals(Map.of("type", "integer"), nestedProps.get("value"));
@@ -91,10 +95,11 @@ class ProtobufSchemaTest {
 		Map<String, Object> repeatedNested = (Map<String, Object>) props.get("repeatedNested");
 		assertEquals("array", repeatedNested.get("type"));
 
-		// enum field
+		// enum field has title
 		@SuppressWarnings("unchecked")
 		Map<String, Object> enumSchema = (Map<String, Object>) props.get("enumValue");
 		assertEquals("string", enumSchema.get("type"));
+		assertEquals("TestEnum", enumSchema.get("title"));
 		assertEquals(List.of("TEST_ENUM_UNSPECIFIED", "TEST_ENUM_FOO", "TEST_ENUM_BAR", "TEST_ENUM_BAZ"),
 				enumSchema.get("enum"));
 	}
@@ -162,13 +167,13 @@ class ProtobufSchemaTest {
 
 		assertEquals(Map.of("type", "integer"), props.get("int32Value"));
 		assertIntegerWithMinZero(props.get("uint32Value"));
-		assertEquals(Map.of("type", "string"), props.get("int64Value"));
-		assertEquals(Map.of("type", "string"), props.get("uint64Value"));
+		assertStringWithFormat(props.get("int64Value"), "int64");
+		assertStringWithFormat(props.get("uint64Value"), "uint64");
 		assertFloatSchema(props.get("floatValue"));
 		assertFloatSchema(props.get("doubleValue"));
 		assertEquals(Map.of("type", "boolean"), props.get("boolValue"));
 		assertEquals(Map.of("type", "string"), props.get("stringValue"));
-		assertEquals(Map.of("type", "string"), props.get("bytesValue"));
+		assertBytesSchema(props.get("bytesValue"));
 	}
 
 	@Test
@@ -181,6 +186,7 @@ class ProtobufSchemaTest {
 		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
 		assertEquals("string", valueSchema.get("type"));
 		assertEquals("date-time", valueSchema.get("format"));
+		assertEquals("RFC 3339 date-time format.", valueSchema.get("description"));
 	}
 
 	@Test
@@ -189,7 +195,11 @@ class ProtobufSchemaTest {
 
 		@SuppressWarnings("unchecked")
 		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
-		assertEquals(Map.of("type", "string"), props.get("value"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
+		assertEquals("string", valueSchema.get("type"));
+		assertEquals("Signed seconds with up to 9 fractional digits, suffixed with 's'.",
+				valueSchema.get("description"));
 	}
 
 	@Test
@@ -198,7 +208,10 @@ class ProtobufSchemaTest {
 
 		@SuppressWarnings("unchecked")
 		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
-		assertEquals(Map.of("type", "string"), props.get("value"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
+		assertEquals("string", valueSchema.get("type"));
+		assertEquals("Comma-separated camelCase field paths.", valueSchema.get("description"));
 	}
 
 	@Test
@@ -208,17 +221,23 @@ class ProtobufSchemaTest {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> props = (Map<String, Object>) schema.get("properties");
 
-		// Struct → object
-		assertEquals(Map.of("type", "object"), props.get("structValue"));
+		// Struct → object with description
+		@SuppressWarnings("unchecked")
+		Map<String, Object> structSchema = (Map<String, Object>) props.get("structValue");
+		assertEquals("object", structSchema.get("type"));
+		assertEquals("Arbitrary JSON object.", structSchema.get("description"));
 
-		// Value → {} (any)
+		// Value → any with description
 		@SuppressWarnings("unchecked")
 		Map<String, Object> valueSchema = (Map<String, Object>) props.get("value");
-		assertTrue(valueSchema.isEmpty() || !valueSchema.containsKey("type"),
-				"Value should be empty schema (any type)");
+		assertFalse(valueSchema.containsKey("type"), "Value should not have a type constraint");
+		assertEquals("Arbitrary JSON value.", valueSchema.get("description"));
 
-		// ListValue → array
-		assertEquals(Map.of("type", "array"), props.get("listValue"));
+		// ListValue → array with description
+		@SuppressWarnings("unchecked")
+		Map<String, Object> listSchema = (Map<String, Object>) props.get("listValue");
+		assertEquals("array", listSchema.get("type"));
+		assertEquals("JSON array of arbitrary values.", listSchema.get("description"));
 	}
 
 	@Test
@@ -231,6 +250,7 @@ class ProtobufSchemaTest {
 		Map<String, Object> anySchema = (Map<String, Object>) props.get("value");
 		assertEquals("object", anySchema.get("type"));
 		assertEquals(List.of("@type"), anySchema.get("required"));
+		assertEquals("Arbitrary message identified by a type URL in @type.", anySchema.get("description"));
 	}
 
 	@Test
@@ -258,6 +278,7 @@ class ProtobufSchemaTest {
 		Map<String, Object> schema = ProtobufSchema.generate(TestAllScalars.class);
 		assertEquals("https://json-schema.org/draft/2020-12/schema", schema.get("$schema"));
 		assertEquals("object", schema.get("type"));
+		assertEquals("TestAllScalars", schema.get("title"));
 		assertNotNull(schema.get("properties"));
 	}
 
@@ -294,5 +315,19 @@ class ProtobufSchemaTest {
 		Map<String, Object> s = (Map<String, Object>) schema;
 		assertEquals("integer", s.get("type"));
 		assertEquals(0, s.get("minimum"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertStringWithFormat(Object schema, String expectedFormat) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		assertEquals("string", s.get("type"));
+		assertEquals(expectedFormat, s.get("format"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private void assertBytesSchema(Object schema) {
+		Map<String, Object> s = (Map<String, Object>) schema;
+		assertEquals("string", s.get("type"));
+		assertEquals("base64", s.get("contentEncoding"));
 	}
 }
