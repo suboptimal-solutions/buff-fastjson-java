@@ -18,7 +18,7 @@ import java.util.Map;
  * Keys use protobuf full names matching
  * {@code Descriptor.getFullName()}/{@code FieldDescriptor.getFullName()}/{@code EnumDescriptor.getFullName()}.
  */
-public interface ProtoCommentProvider {
+public interface GeneratedComments {
 
 	/**
 	 * Returns a map of protobuf full name to leading comment text. Keys follow

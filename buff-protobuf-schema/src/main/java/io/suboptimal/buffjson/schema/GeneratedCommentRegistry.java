@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 
-import io.suboptimal.buffjson.ProtoCommentProvider;
+import io.suboptimal.buffjson.GeneratedComments;
 
 /**
  * Registry of proto source comments discovered via {@link ServiceLoader}.
@@ -20,7 +20,7 @@ final class GeneratedCommentRegistry {
 
 	static {
 		Map<String, String> merged = new HashMap<>();
-		ServiceLoader.load(ProtoCommentProvider.class).forEach(p -> merged.putAll(p.getComments()));
+		ServiceLoader.load(GeneratedComments.class).forEach(p -> merged.putAll(p.getComments()));
 		COMMENTS = merged;
 	}
 
@@ -32,9 +32,5 @@ final class GeneratedCommentRegistry {
 	 */
 	static String getComment(String fullName) {
 		return COMMENTS.get(fullName);
-	}
-
-	static boolean hasComments() {
-		return !COMMENTS.isEmpty();
 	}
 }

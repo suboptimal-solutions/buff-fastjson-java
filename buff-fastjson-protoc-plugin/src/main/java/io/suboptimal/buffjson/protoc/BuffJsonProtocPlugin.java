@@ -85,7 +85,7 @@ public final class BuffJsonProtocPlugin {
 
 				// Generate comment provider per proto file
 				FileDescriptorProto fdp = fileDesc.toProto();
-				String commentClassName = getOuterClassName(fileDesc) + "ProtoComments";
+				String commentClassName = getOuterClassName(fileDesc) + "Comments";
 				String commentSource = CommentGenerator.generate(fdp, javaPackage, commentClassName);
 				if (commentSource != null) {
 					String commentFullName = javaPackage + "." + commentClassName;
@@ -108,7 +108,7 @@ public final class BuffJsonProtocPlugin {
 			}
 			if (!commentClassNames.isEmpty()) {
 				response.addFile(CodeGeneratorResponse.File.newBuilder()
-						.setName("META-INF/services/io.suboptimal.buffjson.ProtoCommentProvider")
+						.setName("META-INF/services/io.suboptimal.buffjson.GeneratedComments")
 						.setContent(String.join("\n", commentClassNames) + "\n").build());
 			}
 		} catch (Exception e) {
