@@ -2,6 +2,7 @@ package io.suboptimal.buffjson.schema;
 
 import java.util.*;
 
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.SourceCodeInfo;
 import com.google.protobuf.Descriptors.Descriptor;
@@ -306,77 +307,66 @@ public final class ProtobufSchema {
 		};
 	}
 
-	// =========================================================================
-	// Source code info / comment extraction
-	// =========================================================================
-
-	/**
-	 * Extracts the leading comment for a message descriptor from the proto file's
-	 * source code info. Returns null if source code info is not available (requires
-	 * protoc {@code --include_source_info} flag).
-	 */
+	// Checks generated comment registry first, falls back to SourceCodeInfo
 	private String getComment(Descriptor descriptor) {
+		String comment = GeneratedCommentRegistry.getComment(descriptor.getFullName());
+		if (comment != null) {
+			return comment;
+		}
 		List<Integer> path = getMessagePath(descriptor);
 		return lookupComment(descriptor.getFile(), path);
 	}
 
 	private String getComment(FieldDescriptor fd) {
+		String comment = GeneratedCommentRegistry.getComment(fd.getFullName());
+		if (comment != null) {
+			return comment;
+		}
 		Descriptor parent = fd.getContainingType();
 		List<Integer> parentPath = getMessagePath(parent);
 		List<Integer> path = new ArrayList<>(parentPath);
-		// DescriptorProto.FIELD_FIELD_NUMBER = 2
-		path.add(2);
+		path.add(DescriptorProto.FIELD_FIELD_NUMBER);
 		path.add(fd.getIndex());
 		return lookupComment(fd.getFile(), path);
 	}
 
 	private String getComment(EnumDescriptor enumDesc) {
+		String comment = GeneratedCommentRegistry.getComment(enumDesc.getFullName());
+		if (comment != null) {
+			return comment;
+		}
 		if (enumDesc.getContainingType() != null) {
 			List<Integer> parentPath = getMessagePath(enumDesc.getContainingType());
 			List<Integer> path = new ArrayList<>(parentPath);
-			// DescriptorProto.ENUM_TYPE_FIELD_NUMBER = 4
-			path.add(4);
+			path.add(DescriptorProto.ENUM_TYPE_FIELD_NUMBER);
 			path.add(enumDesc.getIndex());
 			return lookupComment(enumDesc.getFile(), path);
 		}
-		// Top-level enum: FileDescriptorProto.ENUM_TYPE_FIELD_NUMBER = 5
-		return lookupComment(enumDesc.getFile(), List.of(5, enumDesc.getIndex()));
+		return lookupComment(enumDesc.getFile(),
+				List.of(FileDescriptorProto.ENUM_TYPE_FIELD_NUMBER, enumDesc.getIndex()));
 	}
 
-	/**
-	 * Computes the source code info path for a message descriptor, handling
-	 * nesting.
-	 */
 	private static List<Integer> getMessagePath(Descriptor descriptor) {
 		Deque<Integer> indices = new ArrayDeque<>();
 		Descriptor current = descriptor;
 		while (current != null) {
 			indices.addFirst(current.getIndex());
 			if (current.getContainingType() != null) {
-				// DescriptorProto.NESTED_TYPE_FIELD_NUMBER = 3
-				indices.addFirst(3);
+				indices.addFirst(DescriptorProto.NESTED_TYPE_FIELD_NUMBER);
 			} else {
-				// FileDescriptorProto.MESSAGE_TYPE_FIELD_NUMBER = 4
-				indices.addFirst(4);
+				indices.addFirst(FileDescriptorProto.MESSAGE_TYPE_FIELD_NUMBER);
 			}
 			current = current.getContainingType();
 		}
 		return new ArrayList<>(indices);
 	}
 
-	/**
-	 * Looks up a comment by path in the file's source code info. Builds and caches
-	 * a path→comment index per file on first access.
-	 */
+	// Builds and caches a path→comment index per file on first access
 	private String lookupComment(FileDescriptor file, List<Integer> path) {
 		Map<List<Integer>, String> index = commentCache.computeIfAbsent(file, ProtobufSchema::buildCommentIndex);
 		return index.get(path);
 	}
 
-	/**
-	 * Builds a path→comment index from a file's source code info. Returns an empty
-	 * map if source code info is not available.
-	 */
 	private static Map<List<Integer>, String> buildCommentIndex(FileDescriptor file) {
 		FileDescriptorProto proto = file.toProto();
 		if (!proto.hasSourceCodeInfo()) {
@@ -394,10 +384,6 @@ public final class ProtobufSchema {
 		}
 		return index;
 	}
-
-	// =========================================================================
-	// Map construction helpers
-	// =========================================================================
 
 	private static Map<String, Object> ref(String fullName) {
 		return mapOf("$ref", "#/$defs/" + fullName);

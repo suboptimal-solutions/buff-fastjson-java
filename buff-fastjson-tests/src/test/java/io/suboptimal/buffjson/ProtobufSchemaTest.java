@@ -282,6 +282,38 @@ class ProtobufSchemaTest {
 		assertNotNull(schema.get("properties"));
 	}
 
+	@Test
+	void protoCommentsFromGeneratedRegistry() {
+		// Comments from conformance_test.proto are available via the generated
+		// ProtoCommentProvider (protoc plugin extracts them from SourceCodeInfo)
+		Map<String, Object> schema = ProtobufSchema.generate(TestAllScalars.getDescriptor());
+		assertEquals("Covers all scalar types", schema.get("description"));
+
+		// Recursive message — description lives inside $defs
+		Map<String, Object> recursiveSchema = ProtobufSchema.generate(TestRecursive.getDescriptor());
+		@SuppressWarnings("unchecked")
+		Map<String, Object> defs = (Map<String, Object>) recursiveSchema.get("$defs");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> recursiveDef = (Map<String, Object>) defs.get("io.suboptimal.buffjson.proto.TestRecursive");
+		assertEquals("Recursive message", recursiveDef.get("description"));
+
+		// Map fields
+		Map<String, Object> mapsSchema = ProtobufSchema.generate(TestMaps.getDescriptor());
+		assertEquals("Map fields with various key types", mapsSchema.get("description"));
+
+		// Enum comment
+		Map<String, Object> nestingSchema = ProtobufSchema.generate(TestNesting.getDescriptor());
+		@SuppressWarnings("unchecked")
+		Map<String, Object> nestingProps = (Map<String, Object>) nestingSchema.get("properties");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> enumSchema = (Map<String, Object>) nestingProps.get("enumValue");
+		assertEquals("Nested messages and enums", enumSchema.get("description"));
+
+		// NestedMessage has no comment — no description
+		Map<String, Object> nestedSchema = ProtobufSchema.generate(NestedMessage.getDescriptor());
+		assertNull(nestedSchema.get("description"));
+	}
+
 	// --- assertion helpers ---
 
 	@SuppressWarnings("unchecked")

@@ -68,6 +68,7 @@ public final class BuffJsonProtocPlugin {
 
 			List<String> encoderClassNames = new ArrayList<>();
 			List<String> decoderClassNames = new ArrayList<>();
+			List<String> commentClassNames = new ArrayList<>();
 
 			for (FileDescriptor fileDesc : fileDescriptors.values()) {
 				if (!filesToGenerate.contains(fileDesc.getName()))
@@ -81,6 +82,18 @@ public final class BuffJsonProtocPlugin {
 					generateCodegenClasses(response, msgDesc, javaPackage, protoToJavaClass, protoToDecoderClass,
 							decoderClassNames, "JsonDecoder", DecoderGenerator::generate);
 				}
+
+				// Generate comment provider per proto file
+				FileDescriptorProto fdp = fileDesc.toProto();
+				String commentClassName = getOuterClassName(fileDesc) + "ProtoComments";
+				String commentSource = CommentGenerator.generate(fdp, javaPackage, commentClassName);
+				if (commentSource != null) {
+					String commentFullName = javaPackage + "." + commentClassName;
+					String commentFilePath = javaPackage.replace('.', '/') + "/" + commentClassName + ".java";
+					response.addFile(CodeGeneratorResponse.File.newBuilder().setName(commentFilePath)
+							.setContent(commentSource).build());
+					commentClassNames.add(commentFullName);
+				}
 			}
 
 			if (!encoderClassNames.isEmpty()) {
@@ -92,6 +105,11 @@ public final class BuffJsonProtocPlugin {
 				response.addFile(CodeGeneratorResponse.File.newBuilder()
 						.setName("META-INF/services/io.suboptimal.buffjson.GeneratedDecoder")
 						.setContent(String.join("\n", decoderClassNames) + "\n").build());
+			}
+			if (!commentClassNames.isEmpty()) {
+				response.addFile(CodeGeneratorResponse.File.newBuilder()
+						.setName("META-INF/services/io.suboptimal.buffjson.ProtoCommentProvider")
+						.setContent(String.join("\n", commentClassNames) + "\n").build());
 			}
 		} catch (Exception e) {
 			response.setError(e.getMessage());
