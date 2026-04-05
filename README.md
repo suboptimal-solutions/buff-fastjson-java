@@ -255,7 +255,7 @@ mvn test
 
 ```
 buff-json/
-  buff-json-core/           # Library: BuffJson.encode()/decode() API + internal serialization
+  buff-json/                # Library: BuffJson.encode()/decode() API + internal serialization
   buff-json-protoc-plugin/  # Optional protoc plugin for generated encoders/decoders
   buff-json-schema/         # JSON Schema generation from protobuf descriptors (no fastjson2 dep)
   buff-json-jackson/        # Jackson module wrapping BuffJson for ObjectMapper integration

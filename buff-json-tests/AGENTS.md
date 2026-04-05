@@ -81,7 +81,7 @@ are produced alongside standard protobuf sources. A `<resources>` entry copies t
 
 ## Dependencies
 
-- `buff-json-core` — the library under test
+- `buff-json` — the library under test
 - `buff-json-schema` — JSON Schema generation under test
 - `build.buf:protovalidate` — buf.validate constraint types for validate_test.proto
 - `protobuf-java-util` — reference `JsonFormat.printer()` for comparison

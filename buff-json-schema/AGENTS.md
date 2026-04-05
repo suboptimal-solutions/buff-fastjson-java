@@ -122,6 +122,6 @@ via `Class.forName("build.buf.validate.ValidateProto")` checked once at class lo
 ## Dependencies
 
 - `com.google.protobuf:protobuf-java` (provided) — Descriptor, FieldDescriptor, EnumDescriptor, FileDescriptor, DescriptorProtos, SourceCodeInfo, Message
-- `io.github.suboptimal-solutions:buff-json-core` (provided) — BuffJsonGeneratedComments interface for ServiceLoader discovery
+- `io.github.suboptimal-solutions:buff-json` (provided) — BuffJsonGeneratedComments interface for ServiceLoader discovery
 - `build.buf:protovalidate` (optional) — buf.validate constraint types (FieldRules, StringRules, ValidateProto)
 

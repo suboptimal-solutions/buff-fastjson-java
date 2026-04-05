@@ -4,7 +4,7 @@
 
     <parent>
         <groupId>io.github.suboptimal-solutions</groupId>
-        <artifactId>buff-json</artifactId>
+        <artifactId>buff-json-java</artifactId>
         <version>0.1.1-SNAPSHOT</version>
     </parent>
 
@@ -41,7 +41,7 @@
         </dependency>
         <dependency>
             <groupId>io.github.suboptimal-solutions</groupId>
-            <artifactId>buff-json-core</artifactId>
+            <artifactId>buff-json</artifactId>
         </dependency>
         <dependency>
             <groupId>io.github.suboptimal-solutions</groupId>

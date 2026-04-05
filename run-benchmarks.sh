@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run buff-fastjson benchmarks and generate reports.
+# Run buff-json benchmarks and generate reports.
 #
 # Usage:
 #   ./run-benchmarks.sh                          # run regression suite (default)
@@ -13,8 +13,8 @@
 #   ComplexMessageBenchmark    — nested/maps/repeated/oneofs/bytes/timestamps
 #   WktBenchmark               — Timestamp + Struct
 #   RepeatedAndMapBenchmark    — 100+ repeated, 50+ map entries
-#   CeilingBenchmark           — fastjson2 POJO ceiling vs BuffJSON
-#   ProtoBinaryBenchmark       — BuffJSON JSON vs protobuf binary encoding
+#   CeilingBenchmark           — fastjson2 POJO ceiling vs BuffJson
+#   ProtoBinaryBenchmark       — BuffJson JSON vs protobuf binary encoding
 #
 # Full suite — adds these on top of regression:
 #   AllScalarsBenchmark        — all 15 proto3 scalar types + enum
@@ -34,7 +34,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BENCHMARKS_JAR="buff-fastjson-benchmarks/target/benchmarks.jar"
+BENCHMARKS_JAR="buff-json-benchmarks/target/benchmarks.jar"
 REPORTS_DIR="benchmark-reports"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 
@@ -184,7 +184,7 @@ with open(report_file, "w") as f:
         f.write(f"## {class_name}\n\n")
 
         if is_proto_binary_class(class_name):
-            # Proto binary benchmark: compare BuffJSON JSON vs protobuf binary
+            # Proto binary benchmark: compare BuffJson JSON vs protobuf binary
             by_key = {}
             for m in methods:
                 by_key[m["method"]] = m
@@ -196,7 +196,7 @@ with open(report_file, "w") as f:
                 ("complex decode", "complexJsonDecode", "complexBinaryDecode"),
             ]
 
-            f.write("| | BuffJSON JSON | Protobuf Binary | JSON / Binary |\n")
+            f.write("| | BuffJson JSON | Protobuf Binary | JSON / Binary |\n")
             f.write("|---|---:|---:|:---:|\n")
             for label, json_key, bin_key in rows:
                 jm = by_key.get(json_key)
@@ -225,7 +225,7 @@ with open(report_file, "w") as f:
                 elif name == "buffJsonRuntime":
                     bj_runtime = m
 
-            f.write("| | Fastjson2 | BuffJSON | BuffJSON / Fastjson2 |\n")
+            f.write("| | Fastjson2 | BuffJson | BuffJson / Fastjson2 |\n")
             f.write("|---|---:|---:|:---:|\n")
 
             # Compiled row
@@ -243,7 +243,7 @@ with open(report_file, "w") as f:
             f.write("\n")
             continue
 
-        # Standard benchmark classes: BuffJSON vs JsonFormat, row per mode
+        # Standard benchmark classes: BuffJson vs JsonFormat, row per mode
         comparisons = defaultdict(dict)
         for m in methods:
             name = m["method"]
@@ -268,10 +268,10 @@ with open(report_file, "w") as f:
         has_jackson = any(classify_encoder(m["method"]) == "jackson" for m in methods)
 
         if has_jackson:
-            f.write("| | BuffJSON | JsonFormat | Jackson | BuffJSON / JsonFormat | BuffJSON / Jackson |\n")
+            f.write("| | BuffJson | JsonFormat | Jackson | BuffJson / JsonFormat | BuffJson / Jackson |\n")
             f.write("|---|---:|---:|---:|:---:|:---:|\n")
         else:
-            f.write("| | BuffJSON | JsonFormat | BuffJSON / JsonFormat |\n")
+            f.write("| | BuffJson | JsonFormat | BuffJson / JsonFormat |\n")
             f.write("|---|---:|---:|:---:|\n")
 
         for key in sorted(comparisons.keys()):
@@ -381,9 +381,9 @@ with open(report_file, "w") as f:
         bjc = next((m["score"] for m in ceiling_methods if m["method"] == "buffJsonCompiled"), None)
         bjr = next((m["score"] for m in ceiling_methods if m["method"] == "buffJsonRuntime"), None)
         if fj2c and bjc and fj2c > 0:
-            f.write(f"- **Compiled: BuffJSON vs fastjson2:** {bjc / fj2c:.2f}x\n")
+            f.write(f"- **Compiled: BuffJson vs fastjson2:** {bjc / fj2c:.2f}x\n")
         if fj2r and bjr and fj2r > 0:
-            f.write(f"- **Runtime: BuffJSON vs fastjson2:** {bjr / fj2r:.2f}x\n")
+            f.write(f"- **Runtime: BuffJson vs fastjson2:** {bjr / fj2r:.2f}x\n")
 
     f.write(f"\n\n---\n*Generated from `{os.path.basename(json_file)}`*\n")
 

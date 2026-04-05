@@ -84,7 +84,7 @@ public final class ProtobufSchema {
 	}
 
 	// Includes google.protobuf.Empty (unlike the serialization modules in
-	// buff-json-core) because schema generation treats it as a WKT with a
+	// buff-json) because schema generation treats it as a WKT with a
 	// fixed schema rather than expanding its fields.
 	private static final Set<String> WELL_KNOWN_TYPE_NAMES = Set.of("google.protobuf.Any", "google.protobuf.Timestamp",
 			"google.protobuf.Duration", "google.protobuf.FieldMask", "google.protobuf.Struct", "google.protobuf.Value",

@@ -15,9 +15,9 @@ import io.suboptimal.buffjson.BuffJsonEncoder;
  * protobuf {@link Message} types through Jackson's {@code ObjectMapper}.
  *
  * <p>
- * This is a <b>thin wrapper</b> around buff-json-core's {@link BuffJsonEncoder}
- * and {@link BuffJsonDecoder} — not a reimplementation of proto3 JSON handling.
- * The serialization output is identical to
+ * This is a <b>thin wrapper</b> around buff-json's {@link BuffJsonEncoder} and
+ * {@link BuffJsonDecoder} — not a reimplementation of proto3 JSON handling. The
+ * serialization output is identical to
  * {@code JsonFormat.printer().omittingInsignificantWhitespace().print()}.
  *
  * <h3>Basic usage</h3>

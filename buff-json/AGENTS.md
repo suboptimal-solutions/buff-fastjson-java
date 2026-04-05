@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json-core
+# AGENTS.md - buff-json
 
 ## Module Purpose
 

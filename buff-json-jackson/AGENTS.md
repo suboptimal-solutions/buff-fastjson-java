@@ -63,7 +63,7 @@ io.suboptimal.buffjson.jackson/
 ## Dependencies
 
 - `com.fasterxml.jackson.core:jackson-databind` (provided) — ObjectMapper, Module, JsonSerializer, JsonDeserializer
-- `com.alibaba.fastjson2:fastjson2` (provided) — runtime dependency of buff-json-core
+- `com.alibaba.fastjson2:fastjson2` (provided) — runtime dependency of buff-json
 - `com.google.protobuf:protobuf-java` (provided) — Message types
-- `io.github.suboptimal-solutions:buff-json-core` (compile) — BuffJson, BuffJsonEncoder, BuffJsonDecoder
+- `io.github.suboptimal-solutions:buff-json` (compile) — BuffJson, BuffJsonEncoder, BuffJsonDecoder
 
