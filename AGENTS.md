@@ -1,4 +1,4 @@
-# AGENTS.md - buff-fastjson-java (root)
+# AGENTS.md - buff-json (root)
 
 ## Project Overview
 
@@ -9,20 +9,20 @@ Includes JSON Schema generation from protobuf descriptors (separate module, no f
 
 ## Architecture
 
-Two encoding paths — codegen (fast) with fallback to generic (reflection):
+Two encoding paths — codegen (fast) with fallback to runtime (reflection):
 
 ```
-BuffJSON.encode(message)
-  -> Encoder.encode(message)
+BuffJson.encode(message)
+  -> BuffJsonEncoder.encode(message)
     -> sets ThreadLocal TypeRegistry + SKIP_GENERATED_ENCODERS (if configured)
     -> JSON.toJSONString(message)       # fastjson2 entry point
       -> ProtobufWriterModule.getObjectWriter()  # intercepts Message types
         -> ProtobufMessageWriter.writeFields()
           -> GeneratedEncoderRegistry.get()    # check for codegen encoder (ServiceLoader)
-             -> if found: GeneratedEncoder.writeFields()   # direct typed accessors, no boxing
+             -> if found: BuffJsonGeneratedEncoder.writeFields()   # direct typed accessors, no boxing
                 -> nested messages: OtherEncoder.INSTANCE.writeFields()  # direct, no registry
                 -> WKT Timestamp/Duration: writeTimestampDirect(seconds, nanos)  # no reflection
-             -> if not:   generic path (MessageSchema + FieldWriter)  # reflection-style getField()
+             -> if not:   runtime path (MessageSchema + FieldWriter)  # reflection-style getField()
 ```
 
 **Codegen path** (optional, ~2-3x faster): protoc plugin generates `*JsonEncoder` per message.
@@ -37,10 +37,10 @@ Additional codegen optimizations:
 - **Pre-cached enum name arrays** — static `String[]` built at class init from enum descriptor values, replaces `forNumber()` + `getValueDescriptor().getName()` per write
 - **String map key optimization** — avoids redundant `toString()` for String-typed map keys
 
-**Generic path** (always available): iterates cached `FieldInfo[]`, dispatches by `JavaType`.
+**Runtime path** (always available): iterates cached `FieldInfo[]`, dispatches by `JavaType`.
 Still ~4-5x faster than `JsonFormat` due to schema caching and fastjson2 buffer reuse.
 
-**Fallback**: `DynamicMessage` instances (e.g., from Any unpacking) always use the generic path.
+**Fallback**: `DynamicMessage` instances (e.g., from Any unpacking) always use the runtime path.
 
 fastjson2 handles: buffer pooling, number formatting, string escaping, UTF-8 encoding.
 We handle: protobuf field extraction, proto3 JSON spec compliance, well-known types.
@@ -49,34 +49,34 @@ We handle: protobuf field extraction, proto3 JSON spec compliance, well-known ty
 
 ```java
 // Simple usage (no Any fields)
-String json = BuffJSON.encode(message);
+String json = BuffJson.encode(message);
 
 // Builder pattern with TypeRegistry (for Any fields)
-Encoder encoder = BuffJSON.encoder()
+BuffJsonEncoder encoder = BuffJson.encoder()
     .withTypeRegistry(TypeRegistry.newBuilder()
         .add(MyMessage.getDescriptor())
         .build());
 String json = encoder.encode(message);
 
-// Force generic path (skip generated encoders, for benchmarking/testing)
-Encoder genericEncoder = BuffJSON.encoder().withGeneratedEncoders(false);
-String json = genericEncoder.encode(message);
+// Force runtime path (skip generated encoders, for benchmarking/testing)
+BuffJsonEncoder genericEncoder = BuffJson.encoder().withGeneratedEncoders(false);
+String json = genericBuffJsonEncoder.encode(message);
 ```
 
-- `BuffJSON` — static entry point + factory for `Encoder`
-- `Encoder` — immutable, thread-safe, cacheable. Holds optional `TypeRegistry` and `useGeneratedEncoders` flag.
-- `GeneratedEncoder<T>` — interface implemented by protoc-plugin-generated encoders. Discovered via `ServiceLoader`.
+- `BuffJson` — static entry point + factory for `BuffJsonEncoder`
+- `BuffJsonEncoder` — immutable, thread-safe, cacheable. Holds optional `TypeRegistry` and `useGeneratedEncoders` flag.
+- `BuffJsonGeneratedEncoder<T>` — interface implemented by protoc-plugin-generated encoders. Discovered via `ServiceLoader`.
 
 ## Key Design Decisions
 
 - **fastjson2 `ObjectWriterModule`**: Chose the public plugin API over depending on fastjson2 internals.
 - **`MessageSchema` caching**: One-time cost per Descriptor. Avoids `getAllFields()` TreeMap allocation.
 - **Pre-computed `char[] nameWithColon`**: Field names pre-encoded as `"name":` for `writeNameRaw(char[])`. Must use `char[]` (not `byte[]`) because `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`.
-- **`message.getField(descriptor)`** for field access in generic path (involves boxing for primitives).
+- **`message.getField(descriptor)`** for field access in runtime path (involves boxing for primitives).
 - **`Float.floatToRawIntBits() == 0`** for default value checks (correctly handles `-0.0`).
 - **`Long.toUnsignedString()`** for uint64, **`Integer.toUnsignedLong()`** for uint32.
 - **ThreadLocal `TypeRegistry`** and **`SKIP_GENERATED_ENCODERS`** for per-encode configuration.
-- **Builder pattern** (`Encoder`) mirrors `JsonFormat.printer()` style, extensible for future options.
+- **Builder pattern** (`BuffJsonEncoder`) mirrors `JsonFormat.printer()` style, extensible for future options.
 - **`GeneratedEncoderRegistry`** uses `ServiceLoader` — zero-config discovery, no registration needed.
 - **`DynamicMessage` guard**: Generated encoders are skipped for `DynamicMessage` instances (e.g., from Any unpacking) because they'd fail the cast to the concrete message type.
 - **Protoc plugin generates to same package** as protobuf messages. `META-INF/services` file is also generated but needs a `<resources>` POM entry to be copied to `target/classes`.
@@ -94,13 +94,14 @@ String json = genericEncoder.encode(message);
 
 ## Module Layout
 
-- **buff-fastjson-core** — public API (`BuffJSON`, `Encoder`, `Decoder`, `GeneratedEncoder`, `GeneratedDecoder`, `GeneratedComments`) + internal serialization/deserialization
-- **buff-fastjson-protoc-plugin** — protoc plugin that generates `*JsonEncoder`, `*JsonDecoder`, and `*Comments` per message/proto file. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout. The `*Comments` classes extract proto source comments from `SourceCodeInfo` (which protoc always sends to plugins) and make them available at runtime via `ServiceLoader`.
-- **buff-protobuf-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-fastjson-core` (both provided scope). `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `GeneratedComments` or `SourceCodeInfo`), `format` hints, and `contentEncoding`.
-- **buff-fastjson-tests** — conformance tests (each validates both codegen and generic paths) + JSON Schema tests + own .proto definitions
-- **buff-fastjson-benchmarks** — JMH benchmarks (3-way: codegen vs generic vs JsonFormat) + own .proto definitions
+- **buff-json-core** — public API (`BuffJson`, `BuffJsonEncoder`, `BuffJsonDecoder`, `BuffJsonGeneratedEncoder`, `BuffJsonGeneratedDecoder`, `BuffJsonGeneratedComments`) + internal serialization/deserialization
+- **buff-json-protoc-plugin** — protoc plugin that generates `*JsonEncoder`, `*JsonDecoder`, and `*Comments` per message/proto file. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout. The `*Comments` classes extract proto source comments from `SourceCodeInfo` (which protoc always sends to plugins) and make them available at runtime via `ServiceLoader`.
+- **buff-json-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-json-core` (both provided scope), with optional `build.buf:protovalidate` for buf.validate constraint mapping. `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `BuffJsonGeneratedComments` or `SourceCodeInfo`), `format` hints, `contentEncoding`, and buf.validate constraints as JSON Schema keywords (minLength, pattern, format, minimum/maximum, minItems, required, etc.) when protovalidate is on the classpath.
+- **buff-json-jackson** — Jackson `Module` wrapping `BuffJson.encode()`/`decode()` for `ObjectMapper` integration. Thin adapter (~4 classes), no reimplementation. Depends on `buff-json-core`, `jackson-databind`, `fastjson2`, `protobuf-java` (all provided). Provides `ProtobufJacksonModule` (register with ObjectMapper) and `BuffJackson` (convenience static API). Protobuf messages work alongside POJOs/records in Jackson serialization. 38 tests including conformance, POJO/record integration, tree model, and roundtrip.
+- **buff-json-tests** — conformance tests (each validates both codegen and runtime paths) + JSON Schema tests + buf.validate constraint tests + own .proto definitions
+- **buff-json-benchmarks** — JMH benchmarks (codegen vs runtime vs JsonFormat vs Jackson-HubSpot vs BuffJsonJackson) + own .proto definitions
 
-Build order in reactor: core → protoc-plugin → schema → tests → benchmarks.
+Build order in reactor: core → protoc-plugin → schema → jackson → tests → benchmarks.
 Each consumer module (tests, benchmarks) configures the protoc plugin via ascopes `protobuf-maven-plugin` `<jvmPlugin>`.
 
 ## Not Yet Implemented

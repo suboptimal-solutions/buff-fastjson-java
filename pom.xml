@@ -3,13 +3,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.suboptimal-solutions</groupId>
-    <artifactId>buff-fastjson-java</artifactId>
+    <artifactId>buff-json-java</artifactId>
     <version>0.1.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <name>buff-fastjson-java</name>
+    <name>buff-json</name>
     <description>Fast JSON serialization for Protocol Buffer messages</description>
-    <url>https://github.com/suboptimal-solutions/buff-fastjson-java</url>
+    <url>https://github.com/suboptimal-solutions/buff-json</url>
 
     <licenses>
         <license>
@@ -26,22 +26,24 @@
     </developers>
 
     <modules>
-        <module>buff-fastjson-core</module>
-        <module>buff-fastjson-protoc-plugin</module>
-        <module>buff-protobuf-schema</module>
-        <module>buff-fastjson-tests</module>
-        <module>buff-fastjson-benchmarks</module>
+        <module>buff-json-core</module>
+        <module>buff-json-protoc-plugin</module>
+        <module>buff-json-schema</module>
+        <module>buff-json-jackson</module>
+        <module>buff-json-tests</module>
+        <module>buff-json-benchmarks</module>
     </modules>
 
     <scm>
-        <connection>scm:git:git://github.com/suboptimal-solutions/buff-fastjson-java.git</connection>
-        <developerConnection>scm:git:ssh://github.com:suboptimal-solutions/buff-fastjson-java.git</developerConnection>
-        <url>https://github.com/suboptimal-solutions/buff-fastjson-java</url>
+        <connection>scm:git:git://github.com/suboptimal-solutions/buff-json-java.git</connection>
+        <developerConnection>scm:git:ssh://github.com:suboptimal-solutions/buff-json-java.git</developerConnection>
+        <url>https://github.com/suboptimal-solutions/buff-json-java</url>
     </scm>
 
     <properties>
         <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
         <fastjson2.version>2.0.61</fastjson2.version>
+        <jackson-databind.version>2.18.1</jackson-databind.version>
         <jackson-datatype-protobuf.version>0.9.18</jackson-datatype-protobuf.version>
         <jmh.version>1.37</jmh.version>
         <junit.version>5.11.4</junit.version>
@@ -55,15 +57,26 @@
         <proto-google-common-protos.version>2.66.0</proto-google-common-protos.version>
         <protobuf-maven-plugin.version>5.1.0</protobuf-maven-plugin.version>
         <protobuf.version>4.34.1</protobuf.version>
+        <protovalidate.version>1.1.0</protovalidate.version>
         <spotless.version>2.44.4</spotless.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>build.buf</groupId>
+                <artifactId>protovalidate</artifactId>
+                <version>${protovalidate.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.alibaba.fastjson2</groupId>
                 <artifactId>fastjson2</artifactId>
                 <version>${fastjson2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson-databind.version}</version>
             </dependency>
             <dependency>
                 <groupId>com.google.api.grpc</groupId>
@@ -87,12 +100,17 @@
             </dependency>
             <dependency>
                 <groupId>io.github.suboptimal-solutions</groupId>
-                <artifactId>buff-fastjson-core</artifactId>
+                <artifactId>buff-json-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.github.suboptimal-solutions</groupId>
-                <artifactId>buff-protobuf-schema</artifactId>
+                <artifactId>buff-json-jackson</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.suboptimal-solutions</groupId>
+                <artifactId>buff-json-schema</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -257,8 +275,9 @@
                             <publishingServerId>central</publishingServerId>
                             <autoPublish>true</autoPublish>
                             <excludeArtifacts>
-                                <artifact>buff-fastjson-tests</artifact>
-                                <artifact>buff-fastjson-benchmarks</artifact>
+                                <artifact>buff-json-java</artifact>
+                                <artifact>buff-json-tests</artifact>
+                                <artifact>buff-json-benchmarks</artifact>
                             </excludeArtifacts>
                         </configuration>
                     </plugin>
