@@ -358,6 +358,89 @@ class BuffJsonProto3ConformanceTest {
 			assertMatchesReference(
 					TestTimestamp.newBuilder().setValue(Timestamp.newBuilder().setSeconds(-1).setNanos(0)).build());
 		}
+
+		@Test
+		void timestampMillisOnly() throws Exception {
+			// Nanos divisible by 1_000_000 → 3 fractional digits
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711627200).setNanos(1_000_000)).build());
+		}
+
+		@Test
+		void timestampMicrosOnly() throws Exception {
+			// Nanos divisible by 1_000 → 6 fractional digits
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711627200).setNanos(1_000)).build());
+		}
+
+		@Test
+		void timestampSingleNano() throws Exception {
+			// 1 nano → 9 fractional digits
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711627200).setNanos(1)).build());
+		}
+
+		@Test
+		void timestampMaxNanos() throws Exception {
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711627200).setNanos(999_999_999)).build());
+		}
+
+		@Test
+		void timestampYear2000() throws Exception {
+			// 2000-01-01T00:00:00Z = 946684800
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(946684800).setNanos(0)).build());
+		}
+
+		@Test
+		void timestampYear1970() throws Exception {
+			// 1970-01-01T00:00:01Z
+			assertMatchesReference(
+					TestTimestamp.newBuilder().setValue(Timestamp.newBuilder().setSeconds(1).setNanos(0)).build());
+		}
+
+		@Test
+		void timestampFarFuture() throws Exception {
+			// 9999-12-31T23:59:59Z = 253402300799
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(253402300799L).setNanos(0)).build());
+		}
+
+		@Test
+		void timestampFarPast() throws Exception {
+			// 0001-01-01T00:00:00Z = -62135596800
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(-62135596800L).setNanos(0)).build());
+		}
+
+		@Test
+		void timestampWithNanosBeforeEpoch() throws Exception {
+			// Negative seconds with nanos
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(-1711627200).setNanos(500_000_000)).build());
+		}
+
+		@Test
+		void timestampMidnight() throws Exception {
+			// 2024-03-28T00:00:00.000Z — all time components zero
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711584000).setNanos(0)).build());
+		}
+
+		@Test
+		void timestampEndOfDay() throws Exception {
+			// 2024-03-28T23:59:59.999999999Z
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1711670399).setNanos(999_999_999)).build());
+		}
+
+		@Test
+		void timestampLeapYear() throws Exception {
+			// 2024-02-29T12:00:00Z (leap day)
+			assertMatchesReference(TestTimestamp.newBuilder()
+					.setValue(Timestamp.newBuilder().setSeconds(1709208000).setNanos(0)).build());
+		}
 	}
 
 	// =========================================================================
