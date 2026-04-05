@@ -68,21 +68,76 @@ public final class BuffJsonDecoder {
 	 * @return the decoded protobuf message
 	 */
 	public <T extends Message> T decode(String json, Class<T> messageClass) {
+		setupThreadLocals();
+		try {
+			return JSON.parseObject(json, messageClass);
+		} finally {
+			clearThreadLocals();
+		}
+	}
+
+	/**
+	 * Decodes a proto3 JSON substring to a Protocol Buffer message without
+	 * allocating a new String. FastJson2 reads the backing storage of the original
+	 * String directly.
+	 *
+	 * @param json
+	 *            the JSON string containing the message
+	 * @param offset
+	 *            start position within the string
+	 * @param length
+	 *            number of characters to parse
+	 * @param messageClass
+	 *            the target protobuf message class
+	 * @return the decoded protobuf message
+	 */
+	public <T extends Message> T decode(String json, int offset, int length, Class<T> messageClass) {
+		setupThreadLocals();
+		try {
+			return JSON.parseObject(json, offset, length, messageClass);
+		} finally {
+			clearThreadLocals();
+		}
+	}
+
+	/**
+	 * Decodes proto3 JSON from a byte array slice to a Protocol Buffer message.
+	 * Zero-copy — FastJson2 reads directly from the provided array.
+	 *
+	 * @param json
+	 *            the byte array containing UTF-8 JSON
+	 * @param offset
+	 *            start position within the array
+	 * @param length
+	 *            number of bytes to parse
+	 * @param messageClass
+	 *            the target protobuf message class
+	 * @return the decoded protobuf message
+	 */
+	public <T extends Message> T decode(byte[] json, int offset, int length, Class<T> messageClass) {
+		setupThreadLocals();
+		try {
+			return JSON.parseObject(json, offset, length, messageClass);
+		} finally {
+			clearThreadLocals();
+		}
+	}
+
+	private void setupThreadLocals() {
 		if (typeRegistry != null) {
 			BuffJson.ACTIVE_REGISTRY.set(typeRegistry);
 		}
 		if (!useGeneratedDecoders) {
 			BuffJson.SKIP_GENERATED_DECODERS.set(Boolean.TRUE);
 		}
-		try {
-			return JSON.parseObject(json, messageClass);
-		} finally {
-			if (typeRegistry != null) {
-				BuffJson.ACTIVE_REGISTRY.remove();
-			}
-			if (!useGeneratedDecoders) {
-				BuffJson.SKIP_GENERATED_DECODERS.remove();
-			}
+	}
+
+	private void clearThreadLocals() {
+		if (typeRegistry != null) {
+			BuffJson.ACTIVE_REGISTRY.remove();
+		}
+		if (!useGeneratedDecoders) {
+			BuffJson.SKIP_GENERATED_DECODERS.remove();
 		}
 	}
 }

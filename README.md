@@ -1,4 +1,4 @@
-# Buff Json (Java)
+# Buff JSON (Java)
 
 Blazingly fast ⚡️ JSON serialization for Protocol Buffer messages in Java, compliant with the [Proto3 JSON spec](https://protobuf.dev/programming-guides/proto3/#json).
 
@@ -113,11 +113,11 @@ MyMessage msg = decoder.decode(json, MyMessage.class);
 The `buff-json-jackson` module provides a Jackson `Module` for projects that use Jackson as their JSON library. It wraps `BuffJson.encode()`/`decode()` under Jackson's serialization API, so protobuf messages work seamlessly alongside POJOs and records in `ObjectMapper`:
 
 ```java
-import io.suboptimal.buffjson.jackson.ProtobufJacksonModule;
+import io.suboptimal.buffjson.jackson.BuffJsonJacksonModule;
 
 // Register with your ObjectMapper
 ObjectMapper mapper = new ObjectMapper();
-mapper.registerModule(new ProtobufJacksonModule());
+mapper.registerModule(new BuffJsonJacksonModule());
 
 // Protobuf messages serialize/deserialize like any other type
 String json = mapper.writeValueAsString(myProtoMessage);
@@ -133,14 +133,14 @@ For optimal deserialization performance, enable `StreamReadFeature.INCLUDE_SOURC
 ```java
 ObjectMapper mapper = JsonMapper.builder()
     .enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION)
-    .addModule(new ProtobufJacksonModule())
+    .addModule(new BuffJsonJacksonModule())
     .build();
 ```
 
 For `google.protobuf.Any` support, pass a `TypeRegistry`:
 
 ```java
-mapper.registerModule(new ProtobufJacksonModule(
+mapper.registerModule(new BuffJsonJacksonModule(
     TypeRegistry.newBuilder().add(MyMessage.getDescriptor()).build()));
 ```
 

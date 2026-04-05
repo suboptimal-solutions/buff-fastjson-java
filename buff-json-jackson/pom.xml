@@ -29,54 +29,8 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>com.google.protobuf</groupId>
-            <artifactId>protobuf-java-util</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
             <groupId>io.github.suboptimal-solutions</groupId>
             <artifactId>buff-json</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-        </dependency>
     </dependencies>
-
-    <build>
-        <testResources>
-            <testResource>
-                <directory>${project.build.directory}/generated-test-sources/protobuf</directory>
-                <includes>
-                    <include>META-INF/**</include>
-                </includes>
-            </testResource>
-        </testResources>
-        <plugins>
-            <plugin>
-                <groupId>io.github.ascopes</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
-                <configuration>
-                    <sourceDirectories>
-                        <sourceDirectory>${project.basedir}/src/test/proto</sourceDirectory>
-                    </sourceDirectories>
-                    <plugins>
-                        <plugin kind="jvm-maven">
-                            <groupId>io.github.suboptimal-solutions</groupId>
-                            <artifactId>buff-json-protoc-plugin</artifactId>
-                            <version>${project.version}</version>
-                            <mainClass>io.suboptimal.buffjson.protoc.BuffJsonProtocPlugin</mainClass>
-                        </plugin>
-                    </plugins>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>generate-test</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
 </project>

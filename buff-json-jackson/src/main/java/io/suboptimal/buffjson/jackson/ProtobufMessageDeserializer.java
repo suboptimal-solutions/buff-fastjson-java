@@ -1,10 +1,7 @@
 package io.suboptimal.buffjson.jackson;
 
 import java.io.IOException;
-import java.io.StringWriter;
-import java.util.logging.Logger;
 
-import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -17,39 +14,35 @@ import io.suboptimal.buffjson.BuffJsonDecoder;
  * Jackson deserializer for protobuf {@link Message} types.
  *
  * <p>
- * Extracts the raw JSON substring from Jackson's parser and delegates to
- * {@link BuffJsonDecoder#decode(String, Class)} for actual proto3 JSON parsing.
- * This avoids building a {@code JsonNode} tree and re-serializing it — Jackson
- * only identifies the object boundaries via {@link JsonParser#skipChildren()},
- * and buff-json's fast decoder handles the actual parsing in a single pass.
+ * Extracts the raw JSON slice from Jackson's parser and delegates to
+ * {@link BuffJsonDecoder} for actual proto3 JSON parsing — no intermediate
+ * String or JsonNode allocation. Jackson only identifies the object boundaries
+ * via {@link JsonParser#skipChildren()}, and buff-json's decoder handles
+ * parsing in a single pass.
  *
  * <p>
  * <b>Required:</b> The owning {@code ObjectMapper} must be created with
- * {@link StreamReadFeature#INCLUDE_SOURCE_IN_LOCATION} enabled for the fast
- * path to activate. Without it, a slower streaming fallback is used. See
- * {@link ProtobufJacksonModule} for configuration details.
+ * {@link StreamReadFeature#INCLUDE_SOURCE_IN_LOCATION} enabled. This allows the
+ * deserializer to access the raw input (String or byte[]) and pass
+ * offset/length directly to FastJson2 without allocating intermediate objects.
+ *
+ * <pre>{@code
+ * ObjectMapper mapper = JsonMapper.builder().enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION)
+ * 		.addModule(new BuffJsonJacksonModule()).build();
+ * }</pre>
  *
  * <p>
  * A separate instance is created per target {@code Message} class (by
- * {@link ProtobufJacksonModule.ProtobufDeserializers}) because the deserializer
+ * {@link BuffJsonJacksonModule.ProtobufDeserializers}) because the deserializer
  * needs to know the concrete class to call {@link BuffJsonDecoder#decode}.
  * Jackson caches resolved deserializers, so this is a one-time cost per message
  * type.
  *
- * @see ProtobufJacksonModule.ProtobufDeserializers
+ * @see BuffJsonJacksonModule.ProtobufDeserializers
  */
 final class ProtobufMessageDeserializer extends JsonDeserializer<Message> {
 
-	private static final Logger LOG = Logger.getLogger(ProtobufMessageDeserializer.class.getName());
-
-	private static volatile boolean sourceWarningLogged;
-
-	/**
-	 * BuffJsonDecoder instance, potentially configured with a TypeRegistry for Any.
-	 */
 	private final BuffJsonDecoder decoder;
-
-	/** The concrete Message subclass to deserialize into. */
 	private final Class<? extends Message> messageClass;
 
 	ProtobufMessageDeserializer(BuffJsonDecoder decoder, Class<? extends Message> messageClass) {
@@ -61,62 +54,53 @@ final class ProtobufMessageDeserializer extends JsonDeserializer<Message> {
 	 * Deserializes a proto3 JSON object from the Jackson parser.
 	 *
 	 * <p>
-	 * <b>Fast path</b> (when {@link StreamReadFeature#INCLUDE_SOURCE_IN_LOCATION}
-	 * is enabled): records the char offset of the opening {@code &#123;}, calls
-	 * {@link JsonParser#skipChildren()} to advance past the matching
-	 * {@code &#125;}, extracts the raw JSON substring, and delegates to buff-json's
-	 * decoder. Jackson never builds a tree or extracts values — it only identifies
-	 * object boundaries.
+	 * Supports two fast paths depending on the input source:
+	 * <ul>
+	 * <li><b>String input</b> ({@code mapper.readValue(String, Class)}): extracts
+	 * char offsets and calls
+	 * {@link BuffJsonDecoder#decode(String, int, int, Class)} — no substring
+	 * allocation.
+	 * <li><b>byte[] input</b> ({@code mapper.readValue(byte[], Class)}): extracts
+	 * byte offsets and calls
+	 * {@link BuffJsonDecoder#decode(byte[], int, int, Class)} — zero-copy.
+	 * </ul>
 	 *
 	 * <p>
-	 * <b>Fallback</b> (stream input or feature disabled): streams tokens to a
-	 * {@link StringWriter} via
-	 * {@link JsonGenerator#copyCurrentStructure(JsonParser)}, avoiding
-	 * {@code JsonNode} tree allocation.
-	 *
-	 * @param parser
-	 *            the Jackson JSON parser positioned at the start of the message
-	 *            object
-	 * @param ctxt
-	 *            the deserialization context
-	 * @return the deserialized protobuf message
+	 * Requires {@link StreamReadFeature#INCLUDE_SOURCE_IN_LOCATION} to be enabled
+	 * on the ObjectMapper. Throws {@link IOException} if the feature is not
+	 * enabled.
 	 */
 	@Override
 	public Message deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
-		// Fast path: extract raw JSON substring when source string is available.
-		// Requires StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION on the ObjectMapper.
 		Object source = parser.currentTokenLocation().contentReference().getRawContent();
+
 		if (source instanceof String rawJson) {
-			long start = parser.currentTokenLocation().getCharOffset();
+			int start = (int) parser.currentTokenLocation().getCharOffset();
 			parser.skipChildren();
-			long end = parser.currentLocation().getCharOffset();
+			int end = (int) parser.currentLocation().getCharOffset();
 			try {
-				return decoder.decode(rawJson.substring((int) start, (int) end), messageClass);
+				return decoder.decode(rawJson, start, end - start, messageClass);
 			} catch (Exception e) {
 				throw new IOException(
 						"Failed to decode protobuf " + messageClass.getSimpleName() + ": " + e.getMessage(), e);
 			}
 		}
 
-		// Warn once if fast path is not available
-		if (!sourceWarningLogged) {
-			sourceWarningLogged = true;
-			LOG.warning("StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION is not enabled on the ObjectMapper. "
-					+ "Protobuf deserialization will use a slower fallback path. "
-					+ "Enable it via: JsonMapper.builder().enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION)");
+		if (source instanceof byte[] rawBytes) {
+			int start = (int) parser.currentTokenLocation().getByteOffset();
+			parser.skipChildren();
+			int end = (int) parser.currentLocation().getByteOffset();
+			try {
+				return decoder.decode(rawBytes, start, end - start, messageClass);
+			} catch (Exception e) {
+				throw new IOException(
+						"Failed to decode protobuf " + messageClass.getSimpleName() + ": " + e.getMessage(), e);
+			}
 		}
 
-		// Fallback: stream tokens directly to a StringWriter (no JsonNode tree).
-		StringWriter sw = new StringWriter(256);
-		try (JsonGenerator gen = parser.getCodec().getFactory().createGenerator(sw)) {
-			gen.copyCurrentStructure(parser);
-		}
-		try {
-			return decoder.decode(sw.toString(), messageClass);
-		} catch (Exception e) {
-			throw new IOException("Failed to decode protobuf " + messageClass.getSimpleName() + ": " + e.getMessage(),
-					e);
-		}
+		throw new IOException("Protobuf deserialization requires StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION enabled "
+				+ "and String or byte[] input. Configure via: JsonMapper.builder()"
+				+ ".enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION)");
 	}
 
 	@Override

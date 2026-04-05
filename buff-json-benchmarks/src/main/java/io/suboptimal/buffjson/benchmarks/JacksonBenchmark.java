@@ -13,7 +13,7 @@ import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 import org.openjdk.jmh.annotations.*;
 
 import io.suboptimal.buffjson.BuffJson;
-import io.suboptimal.buffjson.jackson.ProtobufJacksonModule;
+import io.suboptimal.buffjson.jackson.BuffJsonJacksonModule;
 import io.suboptimal.buffjson.proto.ComplexMessage;
 import io.suboptimal.buffjson.proto.SimpleMessage;
 
@@ -39,7 +39,7 @@ public class JacksonBenchmark {
 					.serializeLongsAsString(true).build()))
 			.build();
 	private static final ObjectMapper BUFF_JACKSON_MAPPER = JsonMapper.builder()
-			.enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION).addModule(new ProtobufJacksonModule()).build();
+			.enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION).addModule(new BuffJsonJacksonModule()).build();
 
 	private SimpleMessage[] simpleMessages;
 	private ComplexMessage[] complexMessages;

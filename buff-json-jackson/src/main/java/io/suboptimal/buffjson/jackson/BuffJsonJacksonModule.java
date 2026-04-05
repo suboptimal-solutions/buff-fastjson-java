@@ -24,7 +24,7 @@ import io.suboptimal.buffjson.BuffJsonEncoder;
  *
  * <pre>{@code
  * ObjectMapper mapper = new ObjectMapper();
- * mapper.registerModule(new ProtobufJacksonModule());
+ * mapper.registerModule(new BuffJsonJacksonModule());
  *
  * // Protobuf messages work like any other Jackson type
  * String json = mapper.writeValueAsString(myProtoMessage);
@@ -47,7 +47,7 @@ import io.suboptimal.buffjson.BuffJsonEncoder;
  *
  * <pre>{@code
  * ObjectMapper mapper = JsonMapper.builder().enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION)
- * 		.addModule(new ProtobufJacksonModule()).build();
+ * 		.addModule(new BuffJsonJacksonModule()).build();
  * }</pre>
  *
  * <h3>Any type support</h3>
@@ -57,7 +57,7 @@ import io.suboptimal.buffjson.BuffJsonEncoder;
  * {@link TypeRegistry} to the constructor:
  *
  * <pre>{@code
- * mapper.registerModule(new ProtobufJacksonModule(TypeRegistry.newBuilder().add(MyMessage.getDescriptor()).build()));
+ * mapper.registerModule(new BuffJsonJacksonModule(TypeRegistry.newBuilder().add(MyMessage.getDescriptor()).build()));
  * }</pre>
  *
  * <h3>Architecture</h3>
@@ -82,9 +82,9 @@ import io.suboptimal.buffjson.BuffJsonEncoder;
  * @see ProtobufMessageSerializer
  * @see ProtobufMessageDeserializer
  */
-public class ProtobufJacksonModule extends com.fasterxml.jackson.databind.Module {
+public class BuffJsonJacksonModule extends com.fasterxml.jackson.databind.Module {
 
-	private static final Version VERSION = new Version(0, 1, 1, "SNAPSHOT", "io.github.suboptimal-solutions",
+	private static final Version VERSION = new Version(0, 2, 0, "", "io.github.suboptimal-solutions",
 			"buff-json-jackson");
 
 	/** Encoder used by the serializer — may include a TypeRegistry for Any. */
@@ -97,7 +97,7 @@ public class ProtobufJacksonModule extends com.fasterxml.jackson.databind.Module
 	 * Creates a module without a {@link TypeRegistry}. Sufficient for messages that
 	 * do not contain {@code google.protobuf.Any} fields.
 	 */
-	public ProtobufJacksonModule() {
+	public BuffJsonJacksonModule() {
 		this(null);
 	}
 
@@ -109,7 +109,7 @@ public class ProtobufJacksonModule extends com.fasterxml.jackson.databind.Module
 	 *            registry containing descriptors for types packed in Any, or
 	 *            {@code null} for no Any support
 	 */
-	public ProtobufJacksonModule(TypeRegistry typeRegistry) {
+	public BuffJsonJacksonModule(TypeRegistry typeRegistry) {
 		BuffJsonEncoder enc = io.suboptimal.buffjson.BuffJson.encoder();
 		BuffJsonDecoder dec = io.suboptimal.buffjson.BuffJson.decoder();
 		if (typeRegistry != null) {
@@ -122,7 +122,7 @@ public class ProtobufJacksonModule extends com.fasterxml.jackson.databind.Module
 
 	@Override
 	public String getModuleName() {
-		return "ProtobufJacksonModule";
+		return "BuffJsonJacksonModule";
 	}
 
 	@Override

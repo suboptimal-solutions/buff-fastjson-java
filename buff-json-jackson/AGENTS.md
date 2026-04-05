@@ -10,7 +10,7 @@ reimplementation. Protobuf messages work seamlessly alongside POJOs and Java rec
 
 ```
 io.suboptimal.buffjson.jackson/
-  ProtobufJacksonModule.java       # Jackson Module — registers serializers/deserializers
+  BuffJsonJacksonModule.java       # Jackson Module — registers serializers/deserializers
   ProtobufMessageSerializer.java   # JsonSerializer<Message> — wraps BuffJsonEncoder.encode()
   ProtobufMessageDeserializer.java # JsonDeserializer<Message> — wraps BuffJsonDecoder.decode()
 ```
