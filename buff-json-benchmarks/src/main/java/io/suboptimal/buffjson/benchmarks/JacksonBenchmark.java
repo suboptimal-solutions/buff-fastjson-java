@@ -7,6 +7,7 @@ import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.protobuf.util.JsonFormat;
+import com.hubspot.jackson.datatype.protobuf.ProtobufJacksonConfig;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 
 import org.openjdk.jmh.annotations.*;
@@ -33,7 +34,10 @@ public class JacksonBenchmark {
 	private static final int POOL_SIZE = 1024;
 	private static final int MASK = POOL_SIZE - 1;
 
-	private static final ObjectMapper JACKSON_MAPPER = new ObjectMapper().registerModule(new ProtobufModule());
+	private static final ObjectMapper JACKSON_MAPPER = JsonMapper.builder()
+			.addModule(new ProtobufModule(ProtobufJacksonConfig.builder().properUnsignedNumberSerialization(true)
+					.serializeLongsAsString(true).build()))
+			.build();
 	private static final ObjectMapper BUFF_JACKSON_MAPPER = JsonMapper.builder()
 			.enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION).addModule(new ProtobufJacksonModule()).build();
 

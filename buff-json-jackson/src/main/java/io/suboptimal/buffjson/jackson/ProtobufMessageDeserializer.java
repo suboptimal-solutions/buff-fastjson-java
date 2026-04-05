@@ -85,7 +85,7 @@ final class ProtobufMessageDeserializer extends JsonDeserializer<Message> {
 	public Message deserialize(JsonParser parser, DeserializationContext ctxt) throws IOException {
 		// Fast path: extract raw JSON substring when source string is available.
 		// Requires StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION on the ObjectMapper.
-		Object source = parser.getInputSource();
+		Object source = parser.currentTokenLocation().contentReference().getRawContent();
 		if (source instanceof String rawJson) {
 			long start = parser.currentTokenLocation().getCharOffset();
 			parser.skipChildren();
