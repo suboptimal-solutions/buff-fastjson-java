@@ -6,6 +6,7 @@ Fast protobuf-to-JSON serializer for Java using fastjson2 as the JSON writing en
 Up to ~10x faster than `JsonFormat.printer()` with the optional protoc plugin (~4-5x without).
 Proto3 JSON spec compliant, including all 16 well-known types.
 Includes JSON Schema generation from protobuf descriptors (separate module, no fastjson2 dependency).
+Includes Swagger/OpenAPI `ModelConverter` for exposing protobuf message schemas in OpenAPI 3.1 docs.
 
 ## Architecture
 
@@ -106,12 +107,13 @@ JSONFactory.getDefaultObjectReaderProvider().register(decoder.readerModule());
 
 - **buff-json** — public API (`BuffJson`, `BuffJsonEncoder`, `BuffJsonDecoder`, `BuffJsonGeneratedEncoder`, `BuffJsonGeneratedDecoder`, `BuffJsonGeneratedComments`) + internal serialization/deserialization
 - **buff-json-protoc-plugin** — protoc plugin that generates `*JsonEncoder`, `*JsonDecoder`, and `*Comments` per message/proto file. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout. The `*Comments` classes extract proto source comments from `SourceCodeInfo` (which protoc always sends to plugins) and make them available at runtime via `ServiceLoader`.
-- **buff-json-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-json` (both provided scope), with optional `build.buf:protovalidate` for buf.validate constraint mapping. `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `BuffJsonGeneratedComments` or `SourceCodeInfo`), `format` hints, `contentEncoding`, and buf.validate constraints as JSON Schema keywords (minLength, pattern, format, minimum/maximum, minItems, required, etc.) when protovalidate is on the classpath.
+- **buff-json-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-json` (both provided scope), with optional `build.buf:protovalidate` for [buf.validate](https://buf.build/docs/protovalidate/) constraint mapping. `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `BuffJsonGeneratedComments` or `SourceCodeInfo`), `format` hints, `contentEncoding`, and [buf.validate](https://buf.build/docs/protovalidate/) constraints as JSON Schema keywords (minLength, pattern, format, minimum/maximum, minItems, required, etc.) when protovalidate is on the classpath.
+- **buff-json-swagger** — Swagger/OpenAPI `ModelConverter` that resolves protobuf `Message` types to OpenAPI 3.1 schemas. Implements `io.swagger.v3.core.converter.ModelConverter`, delegating to `ProtobufSchema.generate()` for schema generation and converting the `Map<String, Object>` result to swagger `Schema` objects. Handles `$defs`/`$ref` rewriting to `#/components/schemas/` with full proto names, `resolveAsRef` support, and all JSON Schema keywords including [buf.validate](https://buf.build/docs/protovalidate/) constraints. Depends on `buff-json-schema` (compile) and `swagger-core-jakarta`, `protobuf-java` (both provided). No auto-registration — requires explicit `ModelConverters.getInstance(true).addConverter(new ProtobufModelConverter())`.
 - **buff-json-jackson** — Jackson `Module` wrapping `BuffJson.encode()`/`decode()` for `ObjectMapper` integration. Thin adapter (~3 classes), no reimplementation. Depends on `buff-json`, `jackson-databind`, `fastjson2`, `protobuf-java` (all provided). Provides `BuffJsonJacksonModule` (register with ObjectMapper). Protobuf messages work alongside POJOs/records in Jackson serialization. 38 tests including conformance, POJO/record integration, tree model, and roundtrip.
-- **buff-json-tests** — conformance tests (each validates both codegen and runtime paths) + JSON Schema tests + buf.validate constraint tests + own .proto definitions
+- **buff-json-tests** — conformance tests (each validates both codegen and runtime paths) + JSON Schema tests + [buf.validate](https://buf.build/docs/protovalidate/) constraint tests + own .proto definitions
 - **buff-json-benchmarks** — JMH benchmarks (codegen vs runtime vs JsonFormat vs Jackson-HubSpot vs BuffJsonJackson) + own .proto definitions
 
-Build order in reactor: core → protoc-plugin → schema → jackson → tests → benchmarks.
+Build order in reactor: core → protoc-plugin → schema → swagger → jackson → tests → benchmarks.
 Each consumer module (tests, benchmarks) configures the protoc plugin via ascopes `protobuf-maven-plugin` `<jvmPlugin>`.
 
 ## Not Yet Implemented

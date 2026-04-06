@@ -36,6 +36,9 @@ import com.google.protobuf.Message;
  * <p>
  * Returns a {@code Map<String, Object>} that can be serialized to JSON with any
  * library (Jackson, Gson, fastjson2) or passed directly to OpenAPI/MCP tooling.
+ * For Swagger/OpenAPI integration, see {@code buff-json-swagger} module which
+ * provides a {@code ModelConverter} that bridges this output to swagger-core
+ * {@code Schema} objects.
  *
  * <p>
  * Handles all proto3 scalar types, enums, nested messages, repeated fields,

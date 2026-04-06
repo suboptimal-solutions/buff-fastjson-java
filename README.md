@@ -187,7 +187,7 @@ Map<String, Object> schema = ProtobufSchema.generate(MyMessage.class);
 
 The schema reflects the [Proto3 JSON mapping](https://protobuf.dev/programming-guides/proto3/#json): int64 types become `{"type": "string", "format": "int64"}`, Timestamp becomes `{"type": "string", "format": "date-time"}`, enums become `{"type": "string", "enum": [...]}`, bytes become `{"type": "string", "contentEncoding": "base64"}`, etc. Messages include `title` from the type name and `description` from proto comments (when the protoc plugin is used). Recursive messages use `$defs`/`$ref`. Returns `Map<String, Object>` for portability — serialize with any JSON library or pass directly to schema-consuming tooling.
 
-#### buf.validate support
+#### [buf.validate](https://buf.build/docs/protovalidate/) support
 
 When [`build.buf:protovalidate`](https://buf.build/docs/protovalidate/) is on the classpath, field-level validation constraints are automatically mapped to JSON Schema keywords:
 
@@ -216,6 +216,18 @@ Generates:
 ```
 
 Supported mappings include `minLength`/`maxLength`, `pattern`, `format` (email, uri, uuid, hostname, ipv4, ipv6), `minimum`/`maximum`/`exclusiveMinimum`/`exclusiveMaximum`, `minItems`/`maxItems`/`uniqueItems`, `minProperties`/`maxProperties`, `const`, `enum`, and `required`. Constraints without a JSON Schema equivalent (prefix, suffix, contains, CEL expressions) are included as `description` text. The dependency is optional — schema generation works without it.
+
+### Swagger / OpenAPI integration
+
+The `buff-json-swagger` module provides a Swagger `ModelConverter` that automatically resolves protobuf `Message` types to OpenAPI 3.1 schemas using `buff-json-schema`:
+
+```java
+import io.suboptimal.buffjson.swagger.ProtobufModelConverter;
+
+ModelConverters.getInstance(true).addConverter(new ProtobufModelConverter());
+```
+
+Once registered, any protobuf message type used in your API controllers is automatically converted to a proper OpenAPI schema — nested messages, maps, enums, well-known types, recursive types (`$ref`), and [buf.validate](https://buf.build/docs/protovalidate/) constraints are all handled. Schema definitions use full proto names (e.g. `my.package.MyMessage`) to avoid collisions across packages.
 
 ## Proto3 JSON Spec Compliance
 
@@ -283,6 +295,7 @@ buff-json/
   buff-json/                # Library: BuffJson.encode()/decode() API + internal serialization
   buff-json-protoc-plugin/  # Optional protoc plugin for generated encoders/decoders
   buff-json-schema/         # JSON Schema generation from protobuf descriptors (no fastjson2 dep)
+  buff-json-swagger/        # Swagger/OpenAPI ModelConverter for protobuf message schemas
   buff-json-jackson/        # Jackson module wrapping BuffJson for ObjectMapper integration
   buff-json-tests/          # Conformance tests (both paths) + own .proto definitions
   buff-json-benchmarks/     # JMH benchmarks (comparison) + own .proto definitions
@@ -295,6 +308,7 @@ buff-json/
 | `com.google.protobuf:protobuf-java`           | 4.34.1  | Protobuf runtime (Message, Descriptor) | core, schema, jackson, plugin |
 | `com.alibaba.fastjson2:fastjson2`             | 2.0.61  | JSON writing engine                    | core, jackson                 |
 | `com.fasterxml.jackson.core:jackson-databind` | 2.18.1  | Jackson ObjectMapper integration       | jackson                       |
+| `io.swagger.core.v3:swagger-core-jakarta`     | 2.2.38  | Swagger/OpenAPI ModelConverter         | swagger                       |
 
 ## License
 
