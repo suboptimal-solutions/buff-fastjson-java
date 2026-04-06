@@ -30,6 +30,13 @@ import com.google.protobuf.Descriptors.OneofDescriptor;
  * {@code forNumber()+getValueDescriptor().getName()} per write
  * <li><b>String map key optimization</b> — avoids redundant {@code toString()}
  * for String-typed map keys
+ * <li><b>Native fastjson2 Base64</b> — uses {@code writeBase64(byte[])} for
+ * bytes fields, encoding directly into the output buffer without intermediate
+ * String
+ * <li><b>Zero-allocation int64</b> — signed types use
+ * {@code writeString(long)}, unsigned use
+ * {@code WellKnownTypes.writeUnsignedLongString()} — no {@code Long.toString()}
+ * or {@code Long.toUnsignedString()} allocation
  * </ul>
  */
 final class EncoderGenerator {

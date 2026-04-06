@@ -36,12 +36,12 @@ Additional codegen optimizations:
 - **String map key optimization** — avoids redundant `toString()` for String-typed map keys
 
 **Runtime path** (always available): iterates cached `FieldInfo[]`, dispatches by `JavaType`.
-Still ~4-5x faster than `JsonFormat` due to schema caching and fastjson2 buffer reuse.
+Still ~5-6x faster than `JsonFormat` due to schema caching and fastjson2 buffer reuse.
 
 **Fallback**: `DynamicMessage` instances (e.g., from Any unpacking) always use the runtime path.
 
-fastjson2 handles: buffer pooling, number formatting, string escaping, UTF-8 encoding.
-We handle: protobuf field extraction, proto3 JSON spec compliance, well-known types.
+fastjson2 handles: buffer pooling, number formatting, string escaping, UTF-8 encoding, Base64 encoding (`writeBase64(byte[])`).
+We handle: protobuf field extraction, proto3 JSON spec compliance, well-known types, epoch→calendar arithmetic for timestamps.
 
 ## Public API
 
@@ -81,7 +81,11 @@ JSONFactory.getDefaultObjectReaderProvider().register(decoder.readerModule());
 - **Pre-computed `char[] nameWithColon`**: Field names pre-encoded as `"name":` for `writeNameRaw(char[])`. Must use `char[]` (not `byte[]`) because `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`.
 - **`message.getField(descriptor)`** for field access in runtime path (involves boxing for primitives).
 - **`Float.floatToRawIntBits() == 0`** for default value checks (correctly handles `-0.0`).
-- **`Long.toUnsignedString()`** for uint64, **`Integer.toUnsignedLong()`** for uint32.
+- **Native fastjson2 methods** for zero-allocation writes: `writeString(long)` for signed int64 (no `Long.toString()` allocation), `writeBase64(byte[])` for bytes fields (no intermediate Base64 String), `writeNameRaw(byte[])` for field names on UTF-8 path (direct `arraycopy`).
+- **`WellKnownTypes.writeUnsignedLongString()`** for uint64/fixed64: delegates to `writeString(long)` when value fits in signed range, formats to `byte[]` + `writeStringLatin1()` for large unsigned values.
+- **`Integer.toUnsignedLong()`** for uint32.
+- **Zero-allocation timestamps**: `writeTimestampDirect()` uses Howard Hinnant's civil_from_days algorithm to convert epoch seconds to year/month/day/hour/minute/second using pure integer arithmetic — no `Instant` or `OffsetDateTime` allocation. Exact-size byte buffers (20/24/27/30 bytes) eliminate `Arrays.copyOf()`.
+- **Exact-size duration buffers**: `writeDurationDirect()` computes buffer size from `longDigitCount(seconds)` + `nanosDigitCount(nanos)` to avoid over-allocation and `Arrays.copyOf()`.
 - **Builder pattern** (`BuffJsonEncoder`) mirrors `JsonFormat.printer()` style, extensible for future options.
 - **`GeneratedEncoderRegistry`** uses `ServiceLoader` — zero-config discovery, no registration needed.
 - **`DynamicMessage` guard**: Generated encoders are skipped for `DynamicMessage` instances (e.g., from Any unpacking) because they'd fail the cast to the concrete message type.

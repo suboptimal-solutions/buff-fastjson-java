@@ -47,6 +47,20 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
  * {@code writeDurationDirect()} accept primitive seconds/nanos directly,
  * bypassing descriptor lookup and {@code message.getField()} reflection. These
  * are used by generated encoders that know the field type at generation time.
+ *
+ * <p>
+ * Timestamp formatting uses Howard Hinnant's civil calendar algorithm to
+ * convert epoch seconds to year/month/day/hour/minute/second using pure integer
+ * arithmetic — no {@code Instant} or {@code OffsetDateTime} allocation. Both
+ * Timestamp and Duration use exact-size byte buffers (computed from nanos
+ * precision and digit count) to avoid {@code Arrays.copyOf()} overhead.
+ *
+ * <p>
+ * Also provides {@code writeUnsignedLongString()} for proto3 uint64/fixed64
+ * fields, which avoids {@code Long.toUnsignedString()} String allocation by
+ * delegating to fastjson2's {@code writeString(long)} for values in signed
+ * range or formatting to {@code byte[]} + {@code writeStringLatin1()} for large
+ * unsigned values.
  */
 public final class WellKnownTypes {
 

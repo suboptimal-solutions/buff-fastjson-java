@@ -19,11 +19,13 @@ import com.google.protobuf.Message;
  * <ul>
  * <li><b>uint32/fixed32</b>: unsigned representation via
  * {@link Integer#toUnsignedLong(int)}
- * <li><b>int64 and all 64-bit types</b>: quoted strings (proto3 spec)
+ * <li><b>int64 (signed)</b>: quoted strings via {@code writeString(long)} —
+ * writes directly to buffer, no {@code Long.toString()} allocation
  * <li><b>uint64/fixed64</b>: unsigned quoted strings via
- * {@link Long#toUnsignedString(long)}
+ * {@link WellKnownTypes#writeUnsignedLongString} — no String allocation
  * <li><b>float/double</b>: NaN and Infinity as quoted strings (not null)
- * <li><b>bytes</b>: standard Base64 encoding
+ * <li><b>bytes</b>: {@code writeBase64(byte[])} — fastjson2 encodes Base64
+ * directly into the output buffer, no intermediate String
  * <li><b>enum</b>: string name (handles both {@link EnumValueDescriptor} and
  * raw Integer from map entries)
  * <li><b>message</b>: delegates to {@link WellKnownTypes} or recursive

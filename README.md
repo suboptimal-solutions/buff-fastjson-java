@@ -24,6 +24,7 @@ Uses [Alibaba fastjson2](https://github.com/alibaba/fastjson2) as the JSON writi
 - **No Gson dependency** for string escaping (unlike `JsonFormat`)
 - **Cached `MessageSchema`** per message Descriptor (one-time cost)
 - **Pre-computed field name chars** for `writeNameRaw()` — avoids per-field string encoding
+- **Zero-allocation timestamps** — epoch→calendar conversion via integer arithmetic (Howard Hinnant's civil calendar algorithm), exact-size byte buffers (no `Arrays.copyOf`)
 - **fastjson2 striped buffer reuse** eliminates per-call allocations
 
 **Codegen path** (optional protoc plugin, ~2-3x additional speedup):
@@ -273,7 +274,7 @@ Reports are written to `benchmark-reports/` with raw output, JSON data, and mark
 mvn test
 ```
 
-232 conformance tests (core module) compare `BuffJson.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features. The Jackson module adds 38 additional tests covering conformance, POJO/record integration, tree model interop, and cross-library roundtrips.
+346 tests compare `BuffJson.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features. The Jackson module adds additional tests covering conformance, POJO/record integration, tree model interop, and cross-library roundtrips.
 
 ## Project Structure
 

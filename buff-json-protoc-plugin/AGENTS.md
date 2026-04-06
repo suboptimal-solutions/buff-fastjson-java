@@ -32,8 +32,9 @@ For each non-WKT, non-map-entry message type:
 4. Pre-cached `String[] ENUM_*_NAMES` arrays for each enum type (built from enum descriptor at class init, avoiding `UNRECOGNIZED` which throws from `getNumber()`)
 5. A `writeFields(JSONWriter, T, ProtobufMessageWriter)` method with inlined per-field encoding logic
 6. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedEncoder` file listing all encoders
-7. A `*Comments.java` class per proto file implementing `BuffJsonGeneratedComments` with a `Map<String, String>` of proto full name → leading comment
-8. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedComments` file listing all comment providers
+7. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedEncoder` file listing all encoders
+8. A `*Comments.java` class per proto file implementing `BuffJsonGeneratedComments` with a `Map<String, String>` of proto full name → leading comment
+9. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedComments` file listing all comment providers
 
 ## Field Handling
 
@@ -42,11 +43,11 @@ For each non-WKT, non-map-entry message type:
 | Scalar (no presence)     | `int v = msg.getId(); if (v != 0) { writeNameRaw; writeInt32(v); }`                        |
 | Scalar (optional)        | `if (msg.hasId()) { writeNameRaw; writeInt32(msg.getId()); }`                              |
 | uint32/fixed32           | `writeInt64(Integer.toUnsignedLong(...))`                                                  |
-| int64 variants           | `writeString(Long.toString(...))`                                                          |
-| uint64/fixed64           | `writeString(Long.toUnsignedString(...))`                                                  |
+| int64 variants           | `writeString((long) ...)` — no String allocation                                           |
+| uint64/fixed64           | `WellKnownTypes.writeUnsignedLongString(jsonWriter, ...)` — no String allocation           |
 | float/double             | Inline NaN/Infinity check                                                                  |
 | Enum                     | Static `ENUM_*_NAMES` array lookup by `msg.getStatusValue()` (no `forNumber()`)            |
-| bytes                    | `Base64.getEncoder().encodeToString(v.toByteArray())`                                      |
+| bytes                    | `jsonWriter.writeBase64(v.toByteArray())` — fastjson2 encodes directly into buffer         |
 | Repeated                 | `msg.getFooList()`, check isEmpty, iterate                                                 |
 | Map (String key)         | `msg.getFooMap()`, iterate, `entry.getKey()` directly (no `toString()`)                    |
 | Map (non-String key)     | `msg.getFooMap()`, iterate, `entry.getKey().toString()`                                    |
