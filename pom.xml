@@ -4,7 +4,7 @@
 
     <groupId>io.github.suboptimal-solutions</groupId>
     <artifactId>buff-json-java</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>buff-json-java</name>
@@ -42,8 +42,8 @@
 
     <properties>
         <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
-        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <fastjson2.version>2.0.61</fastjson2.version>
+        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
         <jackson-databind.version>2.18.1</jackson-databind.version>
         <jackson-datatype-protobuf.version>0.9.18</jackson-datatype-protobuf.version>
         <jmh.version>1.37</jmh.version>
@@ -225,30 +225,6 @@
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>flatten-maven-plugin</artifactId>
-                        <version>${flatten-maven-plugin.version}</version>
-                        <configuration>
-                            <flattenMode>ossrh</flattenMode>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <id>flatten</id>
-                                <goals>
-                                    <goal>flatten</goal>
-                                </goals>
-                                <phase>process-resources</phase>
-                            </execution>
-                            <execution>
-                                <id>flatten-clean</id>
-                                <goals>
-                                    <goal>clean</goal>
-                                </goals>
-                                <phase>clean</phase>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
                         <version>${maven-gpg-plugin.version}</version>
@@ -288,6 +264,30 @@
                                 <goals>
                                     <goal>jar-no-fork</goal>
                                 </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>flatten-maven-plugin</artifactId>
+                        <version>${flatten-maven-plugin.version}</version>
+                        <configuration>
+                            <flattenMode>ossrh</flattenMode>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>flatten</id>
+                                <goals>
+                                    <goal>flatten</goal>
+                                </goals>
+                                <phase>process-resources</phase>
+                            </execution>
+                            <execution>
+                                <id>flatten-clean</id>
+                                <goals>
+                                    <goal>clean</goal>
+                                </goals>
+                                <phase>clean</phase>
                             </execution>
                         </executions>
                     </plugin>
