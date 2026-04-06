@@ -29,6 +29,7 @@
         <module>buff-json</module>
         <module>buff-json-protoc-plugin</module>
         <module>buff-json-schema</module>
+        <module>buff-json-swagger</module>
         <module>buff-json-jackson</module>
         <module>buff-json-tests</module>
         <module>buff-json-benchmarks</module>
@@ -47,6 +48,7 @@
         <jackson-databind.version>2.18.1</jackson-databind.version>
         <jackson-datatype-protobuf.version>0.9.18</jackson-datatype-protobuf.version>
         <jmh.version>1.37</jmh.version>
+        <json-schema-validator.version>1.5.1</json-schema-validator.version>
         <junit.version>5.11.4</junit.version>
         <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
         <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
@@ -60,6 +62,7 @@
         <protobuf.version>4.34.1</protobuf.version>
         <protovalidate.version>1.1.0</protovalidate.version>
         <spotless.version>2.44.4</spotless.version>
+        <swagger-core.version>2.2.38</swagger-core.version>
     </properties>
 
     <dependencyManagement>
@@ -100,6 +103,11 @@
                 <version>${jackson-datatype-protobuf.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.networknt</groupId>
+                <artifactId>json-schema-validator</artifactId>
+                <version>${json-schema-validator.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.github.suboptimal-solutions</groupId>
                 <artifactId>buff-json</artifactId>
                 <version>${project.version}</version>
@@ -113,6 +121,16 @@
                 <groupId>io.github.suboptimal-solutions</groupId>
                 <artifactId>buff-json-schema</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.suboptimal-solutions</groupId>
+                <artifactId>buff-json-swagger</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-core-jakarta</artifactId>
+                <version>${swagger-core.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>

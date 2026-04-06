@@ -44,6 +44,11 @@
             <artifactId>protobuf-java-util</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.github.suboptimal-solutions</groupId>
             <artifactId>buff-json</artifactId>
         </dependency>
@@ -54,6 +59,14 @@
         <dependency>
             <groupId>io.github.suboptimal-solutions</groupId>
             <artifactId>buff-json-schema</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.suboptimal-solutions</groupId>
+            <artifactId>buff-json-swagger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-core-jakarta</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
