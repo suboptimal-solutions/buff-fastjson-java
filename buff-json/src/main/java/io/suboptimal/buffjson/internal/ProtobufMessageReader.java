@@ -99,8 +99,11 @@ public final class ProtobufMessageReader implements ObjectReader<Message> {
 	@SuppressWarnings("unchecked")
 	public Message readMessage(JSONReader reader, Descriptor descriptor, Message defaultInstance) {
 		if (useGenerated && defaultInstance instanceof BuffJsonCodecHolder holder) {
+			@SuppressWarnings("unchecked")
 			BuffJsonGeneratedDecoder<Message> decoder = (BuffJsonGeneratedDecoder<Message>) holder.buffJsonDecoder();
-			GeneratedDecoderRegistry.put(descriptor, decoder);
+			if (GeneratedDecoderRegistry.get(descriptor) == null) {
+				GeneratedDecoderRegistry.put(descriptor, decoder);
+			}
 			return decoder.readMessage(reader, this);
 		}
 

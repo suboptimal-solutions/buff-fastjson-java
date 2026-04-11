@@ -109,11 +109,13 @@ public final class BuffJsonProtocPlugin {
 		}
 	}
 
+	private static boolean shouldSkip(Descriptor msgDesc) {
+		return msgDesc.getOptions().getMapEntry() || WELL_KNOWN_TYPES.contains(msgDesc.getFullName());
+	}
+
 	private static void collectCodegenNames(Descriptor msgDesc, String javaPackage, Map<String, String> out,
 			String suffix) {
-		if (msgDesc.getOptions().getMapEntry())
-			return;
-		if (WELL_KNOWN_TYPES.contains(msgDesc.getFullName()))
+		if (shouldSkip(msgDesc))
 			return;
 		out.put(msgDesc.getFullName(), javaPackage + "." + flatName(msgDesc) + suffix);
 		for (Descriptor nested : msgDesc.getNestedTypes()) {
@@ -131,9 +133,7 @@ public final class BuffJsonProtocPlugin {
 			String javaPackage, Map<String, String> protoToJavaClass, Map<String, String> protoToCodegenClass,
 			String suffix, CodeGenerator generator) {
 
-		if (msgDesc.getOptions().getMapEntry())
-			return;
-		if (WELL_KNOWN_TYPES.contains(msgDesc.getFullName()))
+		if (shouldSkip(msgDesc))
 			return;
 
 		String messageClassName = protoToJavaClass.get(msgDesc.getFullName());
@@ -160,9 +160,7 @@ public final class BuffJsonProtocPlugin {
 			FileDescriptor fileDesc, String javaPackage, Map<String, String> protoToEncoderClass,
 			Map<String, String> protoToDecoderClass) {
 
-		if (msgDesc.getOptions().getMapEntry())
-			return;
-		if (WELL_KNOWN_TYPES.contains(msgDesc.getFullName()))
+		if (shouldSkip(msgDesc))
 			return;
 
 		String encoderClass = protoToEncoderClass.get(msgDesc.getFullName());
