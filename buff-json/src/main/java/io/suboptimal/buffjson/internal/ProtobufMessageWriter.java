@@ -24,14 +24,14 @@ import io.suboptimal.buffjson.BuffJsonGeneratedEncoder;
  * For each message:
  *
  * <ol>
- * <li>Looks up the cached {@link MessageSchema} for the message's
- * {@link com.google.protobuf.Descriptors.Descriptor}
- * <li>Iterates the pre-computed {@link MessageSchema.FieldInfo} array (not
- * {@code getAllFields()} — no TreeMap allocation)
- * <li>Skips fields with default values (proto3 semantics) or unset presence
- * fields
- * <li>Delegates value writing to {@link FieldWriter} (scalars, enums, bytes) or
- * recursively to this class (nested messages)
+ * <li>Checks {@code message instanceof BuffJsonCodecHolder} for a generated
+ * encoder (injected via protoc insertion points)
+ * <li>If found: delegates to the generated encoder's
+ * {@code writeFields(jw, msg, writer)} — direct typed accessors, no reflection
+ * <li>If not: falls back to the runtime path — looks up the cached
+ * {@link MessageSchema}, iterates pre-computed {@link MessageSchema.FieldInfo}
+ * array (no {@code getAllFields()} TreeMap allocation), skips default values,
+ * delegates value writing to {@link FieldWriter}
  * </ol>
  *
  * <p>

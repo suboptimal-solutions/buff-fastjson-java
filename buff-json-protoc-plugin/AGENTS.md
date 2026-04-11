@@ -2,12 +2,14 @@
 
 ## Module Purpose
 
-Protoc plugin that generates optimized `*JsonEncoder`, `*JsonDecoder`, and `*Comments` classes.
+Protoc plugin that generates optimized `*JsonEncoder` and `*JsonDecoder` classes, plus protoc
+insertion points that inject `BuffJsonCodecHolder` into generated message classes.
 Generated encoders use typed accessors directly (`msg.getId()` returns `int`) instead of
 `message.getField(fd)` (which returns `Object` and boxes primitives), eliminating boxing,
-runtime type dispatch, and schema cache lookups. Generated comment classes extract proto
-source comments from `SourceCodeInfo` (which protoc always provides to plugins even without
-`--include_source_info`) and make them available at runtime for JSON Schema `description` fields.
+runtime type dispatch, and schema cache lookups. Proto source comments are extracted from
+`SourceCodeInfo` (which protoc always provides to plugins) and registered via
+`outer_class_scope` insertion point using reflection — only activated when `buff-json-schema`
+is on the classpath.
 
 ## How It Works
 
@@ -20,7 +22,7 @@ Standard protoc plugin protocol: reads `CodeGeneratorRequest` from stdin, writes
 - `BuffJsonProtocPlugin.java` — main entry point, builds `FileDescriptor` graph, orchestrates generation
 - `EncoderGenerator.java` — generates one `*JsonEncoder` class per message type
 - `DecoderGenerator.java` — generates one `*JsonDecoder` class per message type
-- `CommentGenerator.java` — generates one `*Comments` class per proto file (extracting comments from `SourceCodeInfo`)
+- `CommentGenerator.java` — extracts proto comments from `SourceCodeInfo` and generates static registration blocks for `outer_class_scope` insertion points
 
 ## What Gets Generated
 
@@ -31,10 +33,9 @@ For each non-WKT, non-map-entry message type:
 3. Pre-computed `char[] NAME_*` constants for each field (format: `"fieldName":`)
 4. Pre-cached `String[] ENUM_*_NAMES` arrays for each enum type (built from enum descriptor at class init, avoiding `UNRECOGNIZED` which throws from `getNumber()`)
 5. A `writeFields(JSONWriter, T, ProtobufMessageWriter)` method with inlined per-field encoding logic
-6. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedEncoder` file listing all encoders
-7. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedEncoder` file listing all encoders
-8. A `*Comments.java` class per proto file implementing `BuffJsonGeneratedComments` with a `Map<String, String>` of proto full name → leading comment
-9. A `META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedComments` file listing all comment providers
+6. A `message_implements` insertion point per message adding `BuffJsonCodecHolder` to the implements clause
+7. A `class_scope` insertion point per message adding `buffJsonEncoder()`/`buffJsonDecoder()` method implementations
+8. An `outer_class_scope` insertion point per proto file with a `static {}` block that registers proto source comments via reflection into `GeneratedCommentRegistry` (only when `buff-json-schema` is on the classpath)
 
 ## Field Handling
 
@@ -72,7 +73,9 @@ For each non-WKT, non-map-entry message type:
 - **Map entry types** (`options.map_entry = true`) are skipped — they're synthetic
 - **`writeNameRaw(char[])`** must be used (not `byte[]`) — `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`
 - **Enum `UNRECOGNIZED`** — protobuf's generated `UNRECOGNIZED` constant throws `IllegalArgumentException` from `getNumber()`. Enum name arrays use `EnumDescriptor.getValues()` (not Java `.values()`) to avoid this
-- **Cross-file nested encoder calls** — `protoToEncoderClass` only contains messages from `filesToGenerate`. If a nested message is defined in a non-generated file, the fallback to `writer.writeMessage(jsonWriter, nested)` is used (which still finds the encoder at runtime via the registry)
+- **Cross-file nested encoder calls** — `protoToEncoderClass` only contains messages from `filesToGenerate`. If a nested message is defined in a non-generated file, the fallback to `writer.writeMessage(jsonWriter, nested)` is used (which still finds the encoder at runtime via `instanceof BuffJsonCodecHolder`)
+- **Insertion point file paths** — for `java_multiple_files = true`, message insertion points target `package/MessageName.java`; for `false`, they target `package/OuterClassName.java`. The `outer_class_scope` insertion point always targets the outer class file
+- **Block comments** (`/** */`) — the `*` prefix on each line is stripped by `CommentGenerator.stripLines()`, producing clean multiline text
 
 ## Build
 

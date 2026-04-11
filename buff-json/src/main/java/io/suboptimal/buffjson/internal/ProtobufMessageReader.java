@@ -27,7 +27,10 @@ import io.suboptimal.buffjson.BuffJsonGeneratedDecoder;
  *
  * <ol>
  * <li>Resolves the concrete Message class and gets its default instance
- * <li>Looks up a generated decoder if available (mirrors the encoder path)
+ * <li>Checks {@code defaultInstance instanceof BuffJsonCodecHolder} for a
+ * generated decoder (injected via protoc insertion points)
+ * <li>Caches the decoder by Descriptor for the descriptor-only nested decode
+ * path ({@link GeneratedDecoderRegistry})
  * <li>Falls back to reflection-based field-by-field parsing using
  * {@link MessageSchema} and {@link FieldReader}
  * </ol>

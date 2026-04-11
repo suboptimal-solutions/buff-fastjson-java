@@ -17,11 +17,11 @@ BuffJsonEncoder.encode(message)
   -> creates JSONWriter directly (bypasses fastjson2 module dispatch)
   -> ProtobufMessageWriter(typeRegistry, useGenerated).writeMessage(jsonWriter, message)
     -> writeFields(jsonWriter, message)           # instance method, carries settings
-      -> GeneratedEncoderRegistry.get()           # check for codegen encoder (ServiceLoader)
-         -> if found: BuffJsonGeneratedEncoder.writeFields(jw, msg, writer)  # direct typed accessors
+      -> if message instanceof BuffJsonCodecHolder  # check for codegen encoder (insertion point)
+         -> holder.buffJsonEncoder().writeFields(jw, msg, writer)  # direct typed accessors
             -> nested messages: OtherEncoder.INSTANCE.writeFields(jw, nested, writer)  # direct
             -> WKT Timestamp/Duration: writeTimestampDirect(seconds, nanos)  # no reflection
-         -> if not:   runtime path (MessageSchema + FieldWriter)  # reflection-style getField()
+         -> else: runtime path (MessageSchema + FieldWriter)  # reflection-style getField()
 ```
 
 **Codegen path** (optional, ~2-3x faster): protoc plugin generates `*JsonEncoder` per message.
@@ -70,8 +70,9 @@ JSONFactory.getDefaultObjectReaderProvider().register(decoder.readerModule());
 - `BuffJson` — static entry point + factory for `BuffJsonEncoder` and `BuffJsonDecoder`
 - `BuffJsonEncoder` — configurable encoder. Holds optional `TypeRegistry` and `useGeneratedEncoders` flag. Creates `JSONWriter` directly (no fastjson2 module dispatch). Exposes `writerModule()` for fastjson2 registration.
 - `BuffJsonDecoder` — configurable decoder. Creates `JSONReader` directly. Exposes `readerModule()` for fastjson2 registration.
-- `BuffJsonGeneratedEncoder<T>` — interface implemented by protoc-plugin-generated encoders. Discovered via `ServiceLoader`.
-- `BuffJsonGeneratedDecoder<T>` — interface implemented by protoc-plugin-generated decoders. Discovered via `ServiceLoader`.
+- `BuffJsonGeneratedEncoder<T>` — interface implemented by protoc-plugin-generated encoders.
+- `BuffJsonGeneratedDecoder<T>` — interface implemented by protoc-plugin-generated decoders.
+- `BuffJsonCodecHolder` — interface injected into protobuf message classes via protoc insertion points. Provides `buffJsonEncoder()` and `buffJsonDecoder()` for codec discovery via `instanceof` — no ServiceLoader or reflection.
 
 ## Key Design Decisions
 
@@ -88,9 +89,10 @@ JSONFactory.getDefaultObjectReaderProvider().register(decoder.readerModule());
 - **Zero-allocation timestamps**: `writeTimestampDirect()` uses Howard Hinnant's civil_from_days algorithm to convert epoch seconds to year/month/day/hour/minute/second using pure integer arithmetic — no `Instant` or `OffsetDateTime` allocation. Exact-size byte buffers (20/24/27/30 bytes) eliminate `Arrays.copyOf()`.
 - **Exact-size duration buffers**: `writeDurationDirect()` computes buffer size from `longDigitCount(seconds)` + `nanosDigitCount(nanos)` to avoid over-allocation and `Arrays.copyOf()`.
 - **Builder pattern** (`BuffJsonEncoder`) mirrors `JsonFormat.printer()` style, extensible for future options.
-- **`GeneratedEncoderRegistry`** uses `ServiceLoader` — zero-config discovery, no registration needed.
-- **`DynamicMessage` guard**: Generated encoders are skipped for `DynamicMessage` instances (e.g., from Any unpacking) because they'd fail the cast to the concrete message type.
-- **Protoc plugin generates to same package** as protobuf messages. `META-INF/services` file is also generated but needs a `<resources>` POM entry to be copied to `target/classes`.
+- **Insertion point discovery**: Protoc plugin uses `message_implements` and `class_scope` insertion points to inject `BuffJsonCodecHolder` into generated message classes. At runtime, `instanceof BuffJsonCodecHolder` replaces ServiceLoader — zero overhead, JIT-friendly, no reflection.
+- **`DynamicMessage` guard**: `DynamicMessage` never implements `BuffJsonCodecHolder`, so the `instanceof` check naturally excludes it.
+- **Decoder descriptor cache**: `GeneratedDecoderRegistry` is a simple `ConcurrentHashMap<Descriptor, Decoder>` populated as a side-effect of `instanceof` lookups. Used only for the descriptor-only decode path (nested messages in the runtime reflection path).
+- **Comment registration**: Proto source comments are registered via `outer_class_scope` insertion point in the proto file's outer class. Uses reflection (`Class.forName`) to conditionally call `GeneratedCommentRegistry.register()` only when `buff-json-schema` is on the classpath — no overhead otherwise.
 
 ## Build Notes
 
@@ -105,9 +107,9 @@ JSONFactory.getDefaultObjectReaderProvider().register(decoder.readerModule());
 
 ## Module Layout
 
-- **buff-json** — public API (`BuffJson`, `BuffJsonEncoder`, `BuffJsonDecoder`, `BuffJsonGeneratedEncoder`, `BuffJsonGeneratedDecoder`, `BuffJsonGeneratedComments`) + internal serialization/deserialization
-- **buff-json-protoc-plugin** — protoc plugin that generates `*JsonEncoder`, `*JsonDecoder`, and `*Comments` per message/proto file. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout. The `*Comments` classes extract proto source comments from `SourceCodeInfo` (which protoc always sends to plugins) and make them available at runtime via `ServiceLoader`.
-- **buff-json-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-json` (both provided scope), with optional `build.buf:protovalidate` for [buf.validate](https://buf.build/docs/protovalidate/) constraint mapping. `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `BuffJsonGeneratedComments` or `SourceCodeInfo`), `format` hints, `contentEncoding`, and [buf.validate](https://buf.build/docs/protovalidate/) constraints as JSON Schema keywords (minLength, pattern, format, minimum/maximum, minItems, required, etc.) when protovalidate is on the classpath.
+- **buff-json** — public API (`BuffJson`, `BuffJsonEncoder`, `BuffJsonDecoder`, `BuffJsonGeneratedEncoder`, `BuffJsonGeneratedDecoder`, `BuffJsonCodecHolder`) + internal serialization/deserialization
+- **buff-json-protoc-plugin** — protoc plugin that generates `*JsonEncoder` and `*JsonDecoder` per message type, plus protoc insertion points that inject `BuffJsonCodecHolder` into generated message classes and register proto source comments in the outer class. Depends only on `protobuf-java`. Reads `CodeGeneratorRequest` from stdin, writes `CodeGeneratorResponse` to stdout. Comments are extracted from `SourceCodeInfo` (which protoc always sends to plugins) and registered via reflection into `GeneratedCommentRegistry` when `buff-json-schema` is on the classpath.
+- **buff-json-schema** — JSON Schema (draft 2020-12) generation from protobuf Descriptors. Depends on `protobuf-java` and `buff-json` (both provided scope), with optional `build.buf:protovalidate` for [buf.validate](https://buf.build/docs/protovalidate/) constraint mapping. `ProtobufSchema.generate(Descriptor)` returns `Map<String, Object>`. Includes `title`, `description` (from proto comments via `GeneratedCommentRegistry` or `SourceCodeInfo` fallback), `format` hints, `contentEncoding`, and [buf.validate](https://buf.build/docs/protovalidate/) constraints as JSON Schema keywords (minLength, pattern, format, minimum/maximum, minItems, required, etc.) when protovalidate is on the classpath.
 - **buff-json-swagger** — Swagger/OpenAPI `ModelConverter` that resolves protobuf `Message` types to OpenAPI 3.1 schemas. Implements `io.swagger.v3.core.converter.ModelConverter`, delegating to `ProtobufSchema.generate()` for schema generation and converting the `Map<String, Object>` result to swagger `Schema` objects. Handles `$defs`/`$ref` rewriting to `#/components/schemas/` with full proto names, `resolveAsRef` support, and all JSON Schema keywords including [buf.validate](https://buf.build/docs/protovalidate/) constraints. Depends on `buff-json-schema` (compile) and `swagger-core-jakarta`, `protobuf-java` (both provided). No auto-registration — requires explicit `ModelConverters.getInstance(true).addConverter(new ProtobufModelConverter())`.
 - **buff-json-jackson** — Jackson `Module` wrapping `BuffJson.encode()`/`decode()` for `ObjectMapper` integration. Thin adapter (~3 classes), no reimplementation. Depends on `buff-json`, `jackson-databind`, `fastjson2`, `protobuf-java` (all provided). Provides `BuffJsonJacksonModule` (register with ObjectMapper). Protobuf messages work alongside POJOs/records in Jackson serialization. 38 tests including conformance, POJO/record integration, tree model, and roundtrip.
 - **buff-json-tests** — conformance tests (each validates both codegen and runtime paths) + JSON Schema tests + [buf.validate](https://buf.build/docs/protovalidate/) constraint tests + own .proto definitions

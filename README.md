@@ -81,20 +81,7 @@ Add the plugin to your protobuf-maven-plugin configuration:
 </plugin>
 ```
 
-Also add the generated ServiceLoader file as a resource:
-
-```xml
-<resources>
-    <resource>
-        <directory>${project.build.directory}/generated-sources/protobuf</directory>
-        <includes>
-            <include>META-INF/**</include>
-        </includes>
-    </resource>
-</resources>
-```
-
-No code changes needed — generated encoders and decoders are discovered automatically via `ServiceLoader`. If the plugin is not configured, the runtime reflection path is used.
+No code changes needed — the plugin uses protoc insertion points to inject codec discovery directly into the generated message classes. If the plugin is not configured, the runtime reflection path is used.
 
 The serialization output matches `JsonFormat.printer().omittingInsignificantWhitespace().print()` exactly.
 
@@ -286,7 +273,7 @@ Reports are written to `benchmark-reports/` with raw output, JSON data, and mark
 mvn test
 ```
 
-346 tests compare `BuffJson.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features. The Jackson module adds additional tests covering conformance, POJO/record integration, tree model interop, and cross-library roundtrips.
+366 tests compare `BuffJson.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features. The Jackson module adds additional tests covering conformance, POJO/record integration, tree model interop, and cross-library roundtrips.
 
 ## Project Structure
 

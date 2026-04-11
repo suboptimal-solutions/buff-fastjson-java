@@ -12,17 +12,17 @@ io.suboptimal.buffjson/
   BuffJson.java                    # Static entry point + factory: BuffJson.encoder(), BuffJson.decoder()
   BuffJsonEncoder.java             # Configurable encoder — creates JSONWriter directly, exposes writerModule()
   BuffJsonDecoder.java             # Configurable decoder — creates JSONReader directly, exposes readerModule()
-  BuffJsonGeneratedEncoder.java    # Interface for protoc-plugin-generated encoders (ServiceLoader discovered)
-  BuffJsonGeneratedDecoder.java    # Interface for protoc-plugin-generated decoders (ServiceLoader discovered)
-  BuffJsonGeneratedComments.java   # Interface for protoc-plugin-generated comment providers (ServiceLoader discovered)
+  BuffJsonGeneratedEncoder.java    # Interface for protoc-plugin-generated encoders
+  BuffJsonGeneratedDecoder.java    # Interface for protoc-plugin-generated decoders
+  BuffJsonCodecHolder.java         # Interface injected into message classes via protoc insertion points
+                                   #   provides buffJsonEncoder()/buffJsonDecoder() for instanceof-based discovery
 
 io.suboptimal.buffjson.internal/
   ProtobufWriterModule.java        # fastjson2 ObjectWriterModule (intercepts Message types) — for mixed pojo+proto usage
   ProtobufReaderModule.java        # fastjson2 ObjectReaderModule (intercepts Message types) — for mixed pojo+proto usage
   ProtobufMessageWriter.java       # Stateful instance holding TypeRegistry + useGenerated. Main serialization logic.
   ProtobufMessageReader.java       # Stateful instance holding TypeRegistry + useGenerated. Main deserialization logic.
-  GeneratedEncoderRegistry.java    # ConcurrentHashMap<String, BuffJsonGeneratedEncoder> populated via ServiceLoader
-  GeneratedDecoderRegistry.java    # ConcurrentHashMap<String, BuffJsonGeneratedDecoder> populated via ServiceLoader
+  GeneratedDecoderRegistry.java    # Simple ConcurrentHashMap<Descriptor, Decoder> cache for descriptor-only decode path
   MessageSchema.java               # Cached field metadata per Descriptor (runtime path)
   FieldWriter.java                 # Type-dispatched value writing (scalars, maps, repeated) (runtime path)
   FieldReader.java                 # Type-dispatched value reading (scalars, maps, repeated) (runtime path)
@@ -39,15 +39,15 @@ io.suboptimal.buffjson.internal/
    - Creates `ProtobufMessageWriter(typeRegistry, useGenerated)` with encoder's settings
    - Calls `writer.writeMessage(jsonWriter, message)`
 2. `ProtobufMessageWriter.writeFields(jsonWriter, message)` — instance method:
-   - First checks `GeneratedEncoderRegistry.get(descriptor)`:
+   - First checks `message instanceof BuffJsonCodecHolder`:
      - Skipped if `this.useGenerated` is false (for benchmarking)
-     - Skipped for `DynamicMessage` instances (would fail cast to concrete type)
-     - If found: delegates to `BuffJsonGeneratedEncoder.writeFields(jw, msg, this)` → **codegen path**
+     - `DynamicMessage` never implements `BuffJsonCodecHolder` — naturally excluded
+     - If match: `holder.buffJsonEncoder().writeFields(jw, msg, this)` → **codegen path**
        - Nested messages call other encoders directly via `INSTANCE.writeFields(jw, msg, writer)` (no registry)
        - Timestamp/Duration fields call `writeTimestampDirect()`/`writeDurationDirect()`
        - Enum fields use pre-cached `String[]` name arrays
      - (done — never falls through to runtime path)
-   - If no generated encoder: **runtime path**:
+   - If no match: **runtime path**:
      - Iterates cached `FieldInfo[]` array (no `getAllFields()` TreeMap)
      - For each field: checks presence/default, then calls `FieldWriter.writeValue(jw, fd, value, this)`
 3. `FieldWriter.writeValue()` dispatches on `JavaType` (INT, LONG, FLOAT, ..., MESSAGE)
