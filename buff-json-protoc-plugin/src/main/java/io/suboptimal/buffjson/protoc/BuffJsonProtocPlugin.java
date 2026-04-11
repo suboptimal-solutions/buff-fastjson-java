@@ -1,6 +1,5 @@
 package io.suboptimal.buffjson.protoc;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,8 +57,8 @@ public final class BuffJsonProtocPlugin {
 	}
 
 	/**
-	 * Generates JSON encoder, decoder, and comment classes for the given protoc
-	 * request, adding all output files to the provided response builder.
+	 * Generates JSON encoder, decoder, and comment registration for the given
+	 * protoc request, adding all output files to the provided response builder.
 	 *
 	 * <p>
 	 * This method can be called directly to compose buff-json code generation
@@ -84,8 +83,6 @@ public final class BuffJsonProtocPlugin {
 			}
 		}
 
-		List<String> commentClassNames = new ArrayList<>();
-
 		for (FileDescriptor fileDesc : fileDescriptors.values()) {
 			if (!filesToGenerate.contains(fileDesc.getName()))
 				continue;
@@ -101,23 +98,14 @@ public final class BuffJsonProtocPlugin {
 						protoToDecoderClass);
 			}
 
-			// Generate comment provider per proto file
-			FileDescriptorProto fdp = fileDesc.toProto();
-			String commentClassName = getOuterClassName(fileDesc) + "Comments";
-			String commentSource = CommentGenerator.generate(fdp, javaPackage, commentClassName);
-			if (commentSource != null) {
-				String commentFullName = javaPackage + "." + commentClassName;
-				String commentFilePath = javaPackage.replace('.', '/') + "/" + commentClassName + ".java";
-				response.addFile(CodeGeneratorResponse.File.newBuilder().setName(commentFilePath)
-						.setContent(commentSource).build());
-				commentClassNames.add(commentFullName);
+			// Register comments via outer_class_scope insertion point
+			List<Map.Entry<String, String>> commentEntries = CommentGenerator.extractComments(fileDesc.toProto());
+			String commentBlock = CommentGenerator.generateRegistrationBlock(commentEntries);
+			if (commentBlock != null) {
+				String outerClassFile = outerClassFilePath(fileDesc, javaPackage);
+				response.addFile(CodeGeneratorResponse.File.newBuilder().setName(outerClassFile)
+						.setInsertionPoint("outer_class_scope").setContent(commentBlock).build());
 			}
-		}
-
-		if (!commentClassNames.isEmpty()) {
-			response.addFile(CodeGeneratorResponse.File.newBuilder()
-					.setName("META-INF/services/io.suboptimal.buffjson.BuffJsonGeneratedComments")
-					.setContent(String.join("\n", commentClassNames) + "\n").build());
 		}
 	}
 
@@ -165,13 +153,8 @@ public final class BuffJsonProtocPlugin {
 
 	/**
 	 * Generates protoc insertion point files for the given message descriptor and
-	 * its nested types. For each message, two insertion points are emitted:
-	 * <ul>
-	 * <li>{@code message_implements} — adds {@code BuffJsonCodecHolder} to the
-	 * message's implements clause
-	 * <li>{@code class_scope} — adds {@code buffJsonEncoder()} and
-	 * {@code buffJsonDecoder()} method implementations
-	 * </ul>
+	 * its nested types: {@code message_implements} for {@code BuffJsonCodecHolder}
+	 * and {@code class_scope} for codec method implementations.
 	 */
 	private static void generateInsertionPoints(CodeGeneratorResponse.Builder response, Descriptor msgDesc,
 			FileDescriptor fileDesc, String javaPackage, Map<String, String> protoToEncoderClass,
@@ -195,7 +178,7 @@ public final class BuffJsonProtocPlugin {
 				.setInsertionPoint("message_implements:" + fullName)
 				.setContent("io.suboptimal.buffjson.BuffJsonCodecHolder,\n").build());
 
-		// class_scope insertion point — add method implementations
+		// class_scope insertion point — codec method implementations
 		StringBuilder body = new StringBuilder();
 		if (encoderClass != null) {
 			body.append(
@@ -233,6 +216,14 @@ public final class BuffJsonProtocPlugin {
 		} else {
 			return packagePath + "/" + getOuterClassName(fileDesc) + ".java";
 		}
+	}
+
+	/**
+	 * Returns the file path for the proto file's outer class (used for
+	 * {@code outer_class_scope} insertion point).
+	 */
+	private static String outerClassFilePath(FileDescriptor fileDesc, String javaPackage) {
+		return javaPackage.replace('.', '/') + "/" + getOuterClassName(fileDesc) + ".java";
 	}
 
 	/**

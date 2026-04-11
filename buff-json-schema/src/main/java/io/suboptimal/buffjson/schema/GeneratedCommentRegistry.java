@@ -1,30 +1,29 @@
 package io.suboptimal.buffjson.schema;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.ServiceLoader;
-
-import io.suboptimal.buffjson.BuffJsonGeneratedComments;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of proto source comments discovered via {@link ServiceLoader}.
+ * Registry of proto source comments, populated via reflection from static
+ * initializers in generated protobuf outer classes.
  *
  * <p>
- * When no generated comment providers are on the classpath (the protoc plugin
- * is not used), the registry is empty and {@link #getComment} always returns
- * {@code null}.
+ * When {@code buff-json-schema} is not on the classpath, the generated
+ * registration code silently skips — no comments are loaded, no overhead.
  */
-final class GeneratedCommentRegistry {
+public final class GeneratedCommentRegistry {
 
-	private static final Map<String, String> COMMENTS;
-
-	static {
-		Map<String, String> merged = new HashMap<>();
-		ServiceLoader.load(BuffJsonGeneratedComments.class).forEach(p -> merged.putAll(p.getComments()));
-		COMMENTS = merged;
-	}
+	private static final ConcurrentHashMap<String, String> COMMENTS = new ConcurrentHashMap<>();
 
 	private GeneratedCommentRegistry() {
+	}
+
+	/**
+	 * Registers comments extracted from a {@code .proto} file. Called via
+	 * reflection from generated protobuf outer classes.
+	 */
+	public static void register(Map<String, String> comments) {
+		COMMENTS.putAll(comments);
 	}
 
 	/**

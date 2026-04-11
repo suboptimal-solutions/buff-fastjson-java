@@ -7,23 +7,26 @@ import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.DescriptorProtos.SourceCodeInfo;
 
 /**
- * Generates a {@code *ProtoComments} class per {@code .proto} file that
- * implements {@code BuffJsonGeneratedComments}. Extracts leading comments from
- * {@code SourceCodeInfo}, which protoc always sends to plugins even without
- * {@code --include_source_info}.
+ * Extracts leading comments from protobuf {@code SourceCodeInfo} and produces
+ * entries keyed by protobuf full name. The entries are embedded as a static
+ * registration block in the first generated encoder class per {@code .proto}
+ * file.
  */
 final class CommentGenerator {
 
 	private CommentGenerator() {
 	}
 
-	static String generate(FileDescriptorProto fileProto, String javaPackage, String className) {
+	/**
+	 * Extracts comment entries from a {@code .proto} file descriptor. Returns an
+	 * empty list if no comments are present.
+	 */
+	static List<Map.Entry<String, String>> extractComments(FileDescriptorProto fileProto) {
 		Map<List<Integer>, String> commentIndex = buildCommentIndex(fileProto);
 		if (commentIndex.isEmpty()) {
-			return null;
+			return List.of();
 		}
 
-		// Collect comments keyed by protobuf full name
 		String protoPackage = fileProto.getPackage();
 		List<Map.Entry<String, String>> entries = new ArrayList<>();
 
@@ -38,36 +41,38 @@ final class CommentGenerator {
 			addComment(commentIndex, List.of(FileDescriptorProto.ENUM_TYPE_FIELD_NUMBER, i), fullName, entries);
 		}
 
+		return entries;
+	}
+
+	/**
+	 * Generates a static initializer block that registers comments with
+	 * {@code GeneratedCommentRegistry} via reflection. When
+	 * {@code buff-json-schema} is not on the classpath, {@code Class.forName} fails
+	 * immediately and the {@code Map.ofEntries()} allocation is never reached.
+	 */
+	static String generateRegistrationBlock(List<Map.Entry<String, String>> entries) {
 		if (entries.isEmpty()) {
 			return null;
 		}
 
 		StringBuilder sb = new StringBuilder();
-		sb.append("package ").append(javaPackage).append(";\n\n");
-		sb.append("import java.util.Map;\n\n");
-		sb.append("import io.suboptimal.buffjson.BuffJsonGeneratedComments;\n\n");
-		sb.append("public final class ").append(className).append(" implements BuffJsonGeneratedComments {\n\n");
-		sb.append("    public static final ").append(className).append(" INSTANCE = new ").append(className)
-				.append("();\n\n");
-
-		sb.append("    private static final Map<String, String> COMMENTS = Map.ofEntries(\n");
+		sb.append("static {\n");
+		sb.append("  try {\n");
+		sb.append("    Class.forName(\"io.suboptimal.buffjson.schema.GeneratedCommentRegistry\")\n");
+		sb.append("      .getMethod(\"register\", java.util.Map.class)\n");
+		sb.append("      .invoke(null, java.util.Map.ofEntries(\n");
 		for (int i = 0; i < entries.size(); i++) {
 			var entry = entries.get(i);
-			sb.append("        Map.entry(\"").append(entry.getKey()).append("\", \"")
+			sb.append("        java.util.Map.entry(\"").append(entry.getKey()).append("\", \"")
 					.append(escapeJava(entry.getValue())).append("\")");
 			if (i < entries.size() - 1) {
 				sb.append(",");
 			}
 			sb.append("\n");
 		}
-		sb.append("    );\n\n");
-
-		sb.append("    @Override\n");
-		sb.append("    public Map<String, String> getComments() {\n");
-		sb.append("        return COMMENTS;\n");
-		sb.append("    }\n");
+		sb.append("      ));\n");
+		sb.append("  } catch (ReflectiveOperationException ignored) {}\n");
 		sb.append("}\n");
-
 		return sb.toString();
 	}
 
@@ -121,7 +126,7 @@ final class CommentGenerator {
 		Map<List<Integer>, String> index = new HashMap<>();
 		for (SourceCodeInfo.Location loc : info.getLocationList()) {
 			if (loc.hasLeadingComments()) {
-				String comment = loc.getLeadingComments().strip();
+				String comment = stripLines(loc.getLeadingComments());
 				if (!comment.isEmpty()) {
 					index.put(loc.getPathList(), comment);
 				}
@@ -130,7 +135,27 @@ final class CommentGenerator {
 		return index;
 	}
 
-	private static String escapeJava(String s) {
+	private static String stripLines(String comment) {
+		String[] lines = comment.split("\n");
+		StringBuilder sb = new StringBuilder();
+		for (String line : lines) {
+			String stripped = line.strip();
+			// Remove leading "* " or "*" from block comments (/** ... */)
+			if (stripped.startsWith("* ")) {
+				stripped = stripped.substring(2);
+			} else if (stripped.equals("*")) {
+				stripped = "";
+			}
+			if (!stripped.isEmpty()) {
+				if (!sb.isEmpty())
+					sb.append('\n');
+				sb.append(stripped);
+			}
+		}
+		return sb.toString();
+	}
+
+	static String escapeJava(String s) {
 		return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t",
 				"\\t");
 	}

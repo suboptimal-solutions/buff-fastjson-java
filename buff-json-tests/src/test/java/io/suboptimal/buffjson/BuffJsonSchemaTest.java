@@ -93,7 +93,9 @@ class BuffJsonSchemaTest {
 		assertEquals("NestedMessage", nestedSchema.get("title"));
 		@SuppressWarnings("unchecked")
 		Map<String, Object> nestedProps = (Map<String, Object>) nestedSchema.get("properties");
-		assertEquals(Map.of("type", "integer"), nestedProps.get("value"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueSchema = (Map<String, Object>) nestedProps.get("value");
+		assertEquals("integer", valueSchema.get("type"));
 		assertEquals(Map.of("type", "string"), nestedProps.get("name"));
 
 		// repeated nested → array of $ref
@@ -296,13 +298,15 @@ class BuffJsonSchemaTest {
 		Map<String, Object> schema = ProtobufSchema.generate(TestAllScalars.getDescriptor());
 		assertEquals("Covers all scalar types", schema.get("description"));
 
-		// Recursive message — description lives inside $defs
+		// Recursive message — block comment (/** */) with example, lives inside $defs
 		Map<String, Object> recursiveSchema = ProtobufSchema.generate(TestRecursive.getDescriptor());
 		@SuppressWarnings("unchecked")
 		Map<String, Object> defs = (Map<String, Object>) recursiveSchema.get("$defs");
 		@SuppressWarnings("unchecked")
 		Map<String, Object> recursiveDef = (Map<String, Object>) defs.get("io.suboptimal.buffjson.proto.TestRecursive");
-		assertEquals("Recursive message", recursiveDef.get("description"));
+		String recursiveDesc = (String) recursiveDef.get("description");
+		assertTrue(recursiveDesc.contains("Recursive message that references itself"), "Block comment first line");
+		assertTrue(recursiveDesc.contains("{\"value\": 1, \"child\": {\"value\": 2}}"), "Block comment example");
 
 		// Map fields
 		Map<String, Object> mapsSchema = ProtobufSchema.generate(TestMaps.getDescriptor());
@@ -316,9 +320,22 @@ class BuffJsonSchemaTest {
 		Map<String, Object> enumSchema = (Map<String, Object>) nestingDefs.get("io.suboptimal.buffjson.proto.TestEnum");
 		assertEquals("Nested messages and enums", enumSchema.get("description"));
 
-		// NestedMessage has no comment — no description
+		// NestedMessage has a multiline comment — lines joined with newline
 		Map<String, Object> nestedSchema = ProtobufSchema.generate(NestedMessage.getDescriptor());
-		assertNull(nestedSchema.get("description"));
+		String nestedDesc = (String) nestedSchema.get("description");
+		assertNotNull(nestedDesc, "Multiline comment should produce a description");
+		assertTrue(nestedDesc.contains("A message used as a nested field"), "First line");
+		assertTrue(nestedDesc.contains("Contains a numeric value"), "Second line");
+
+		// Field with multiline comment
+		@SuppressWarnings("unchecked")
+		Map<String, Object> nestedProps = (Map<String, Object>) nestedSchema.get("properties");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> valueField = (Map<String, Object>) nestedProps.get("value");
+		String valueDesc = (String) valueField.get("description");
+		assertNotNull(valueDesc, "Multiline field comment should produce a description");
+		assertTrue(valueDesc.contains("Numeric identifier"), "First line of field comment");
+		assertTrue(valueDesc.contains("used for ordering"), "Second line of field comment");
 	}
 
 	// --- assertion helpers ---

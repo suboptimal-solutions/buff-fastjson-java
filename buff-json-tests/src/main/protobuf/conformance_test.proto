@@ -60,7 +60,14 @@ enum TestEnum {
     TEST_ENUM_BAZ = 3;
 }
 
+// A message used as a nested field in other test messages.
+// Contains a numeric value and a human-readable name.
+//
+// Example:
+//   {"value": 42, "name": "hello"}
 message NestedMessage {
+    // Numeric identifier
+    // used for ordering
     int32 value = 1;
     string name = 2;
 }
@@ -72,7 +79,12 @@ message TestNesting {
     repeated TestEnum repeated_enum = 4;
 }
 
-// Recursive message
+/**
+ * Recursive message that references itself.
+ *
+ * Example:
+ *   {"value": 1, "child": {"value": 2}}
+ */
 message TestRecursive {
     int32 value = 1;
     TestRecursive child = 2;
