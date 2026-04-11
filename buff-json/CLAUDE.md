@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json
+# CLAUDE.md - buff-json
 
 ## Module Purpose
 

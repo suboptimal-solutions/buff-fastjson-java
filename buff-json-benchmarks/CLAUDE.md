@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json-benchmarks
+# CLAUDE.md - buff-json-benchmarks
 
 ## Module Purpose
 

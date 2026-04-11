@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json-protoc-plugin
+# CLAUDE.md - buff-json-protoc-plugin
 
 ## Module Purpose
 

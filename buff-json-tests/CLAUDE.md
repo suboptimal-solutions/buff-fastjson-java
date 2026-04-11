@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json-tests
+# CLAUDE.md - buff-json-tests
 
 ## Module Purpose
 

@@ -1,4 +1,4 @@
-# AGENTS.md - buff-json (root)
+# CLAUDE.md - buff-json (root)
 
 ## Project Overview
 
