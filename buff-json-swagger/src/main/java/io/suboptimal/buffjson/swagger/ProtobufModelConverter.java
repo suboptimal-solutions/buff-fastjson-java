@@ -60,16 +60,16 @@ public class ProtobufModelConverter implements ModelConverter {
 		if (type.isResolveAsRef()) {
 			schema.setName(fullName);
 			context.defineModel(fullName, schema);
-			// Return a bare $ref (no name) — setting a name would cause Swagger's
-			// ModelConverterContextImpl.resolve() to auto-register the returned
-			// $ref under this name, overwriting the full schema in modelByName.
-			return new Schema<>().$ref("#/components/schemas/" + fullName);
+			// Springwolf, springdoc and similar consumers read getName() on the
+			// returned $ref to rewrite it via RefUtils.constructRef(...). A null
+			// name yields #/components/schemas/null, so set it here.
+			return new Schema<>().name(fullName).$ref("#/components/schemas/" + fullName);
 		}
 
 		// Set name on the root only when it's a full inline schema. When it's a
-		// $ref (recursive types — the root is a ref to its own $defs entry),
-		// leaving name null prevents Swagger's auto-register from overwriting
-		// the $defs entry we already populated under the same name.
+		// $ref (recursive types — root is a ref to its own $defs entry), leaving
+		// name null prevents Swagger's ModelConverterContextImpl.resolve() from
+		// auto-registering this $ref and overwriting the $defs entry.
 		if (schema.get$ref() == null) {
 			schema.setName(fullName);
 		}

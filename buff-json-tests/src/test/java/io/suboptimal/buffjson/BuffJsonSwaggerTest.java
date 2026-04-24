@@ -142,7 +142,7 @@ class BuffJsonSwaggerTest {
 	}
 
 	@Test
-	void resolveAsRefRegistersFullSchemaWithName() {
+	void resolveAsRefReturnsNamedRef() {
 		String fullName = "io.suboptimal.buffjson.proto.TestNesting";
 		ResolvedSchema resolved = converters
 				.resolveAsResolvedSchema(new AnnotatedType(TestNesting.class).resolveAsRef(true));
@@ -150,17 +150,10 @@ class BuffJsonSwaggerTest {
 		assertNotNull(resolved);
 		assertNotNull(resolved.schema);
 		assertEquals("#/components/schemas/" + fullName, resolved.schema.get$ref());
-		// The returned $ref intentionally has no name: Swagger's context.resolve()
-		// auto-registers any named returned schema into modelByName, which would
-		// overwrite the full schema we just registered under the same key.
-		assertNull(resolved.schema.getName());
-
-		assertNotNull(resolved.referencedSchemas);
-		Schema registered = resolved.referencedSchemas.get(fullName);
-		assertNotNull(registered, "root schema should be registered when resolveAsRef=true");
-		assertEquals(fullName, registered.getName(),
-				"registered full schema must carry its name (fixes downstream NPEs)");
-		assertType("object", registered);
+		// The returned $ref must carry its name — Springwolf/springdoc read it
+		// via RefUtils.constructRef(schema.getName()) to build the component ref.
+		assertEquals(fullName, resolved.schema.getName(),
+				"$ref schema must carry its name or consumers produce #/components/schemas/null");
 	}
 
 	@Test
