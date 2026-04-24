@@ -111,16 +111,56 @@ class BuffJsonSwaggerTest {
 		ResolvedSchema resolved = resolve(TestRecursive.class);
 
 		// Root should be a $ref to the full proto name
-		assertEquals("#/components/schemas/io.suboptimal.buffjson.proto.TestRecursive", resolved.schema.get$ref());
+		String fullName = "io.suboptimal.buffjson.proto.TestRecursive";
+		assertEquals("#/components/schemas/" + fullName, resolved.schema.get$ref());
 
 		// Definition should be registered with full proto name
 		assertNotNull(resolved.referencedSchemas);
-		String fullName = "io.suboptimal.buffjson.proto.TestRecursive";
 		assertTrue(resolved.referencedSchemas.containsKey(fullName));
 
 		Schema def = resolved.referencedSchemas.get(fullName);
 		assertType("object", def);
 		assertEquals("TestRecursive", def.getTitle());
+		assertEquals(fullName, def.getName(), "registered schema should carry its name");
+	}
+
+	@Test
+	void rootSchemaHasName() {
+		ResolvedSchema resolved = resolve(TestNesting.class);
+		assertEquals("io.suboptimal.buffjson.proto.TestNesting", resolved.schema.getName());
+	}
+
+	@Test
+	void nestedDefsHaveNames() {
+		ResolvedSchema resolved = resolve(TestNesting.class);
+		assertNotNull(resolved.referencedSchemas);
+		assertFalse(resolved.referencedSchemas.isEmpty(), "expected nested defs to be registered");
+		for (var entry : resolved.referencedSchemas.entrySet()) {
+			assertEquals(entry.getKey(), entry.getValue().getName(),
+					"registered schema name should match its components/schemas key");
+		}
+	}
+
+	@Test
+	void resolveAsRefRegistersFullSchemaWithName() {
+		String fullName = "io.suboptimal.buffjson.proto.TestNesting";
+		ResolvedSchema resolved = converters
+				.resolveAsResolvedSchema(new AnnotatedType(TestNesting.class).resolveAsRef(true));
+
+		assertNotNull(resolved);
+		assertNotNull(resolved.schema);
+		assertEquals("#/components/schemas/" + fullName, resolved.schema.get$ref());
+		// The returned $ref intentionally has no name: Swagger's context.resolve()
+		// auto-registers any named returned schema into modelByName, which would
+		// overwrite the full schema we just registered under the same key.
+		assertNull(resolved.schema.getName());
+
+		assertNotNull(resolved.referencedSchemas);
+		Schema registered = resolved.referencedSchemas.get(fullName);
+		assertNotNull(registered, "root schema should be registered when resolveAsRef=true");
+		assertEquals(fullName, registered.getName(),
+				"registered full schema must carry its name (fixes downstream NPEs)");
+		assertType("object", registered);
 	}
 
 	@Test

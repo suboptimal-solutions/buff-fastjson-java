@@ -49,16 +49,29 @@ public class ProtobufModelConverter implements ModelConverter {
 		if (defs != null) {
 			for (var entry : defs.entrySet()) {
 				Schema<?> defSchema = convertMapToSchema(entry.getValue());
+				defSchema.setName(entry.getKey());
 				context.defineModel(entry.getKey(), defSchema);
 			}
 		}
 
 		Schema<?> schema = convertMapToSchema(jsonSchema);
+		String fullName = descriptor.getFullName();
 
 		if (type.isResolveAsRef()) {
-			String name = descriptor.getFullName();
-			context.defineModel(name, schema);
-			return new Schema<>().$ref(name);
+			schema.setName(fullName);
+			context.defineModel(fullName, schema);
+			// Return a bare $ref (no name) — setting a name would cause Swagger's
+			// ModelConverterContextImpl.resolve() to auto-register the returned
+			// $ref under this name, overwriting the full schema in modelByName.
+			return new Schema<>().$ref("#/components/schemas/" + fullName);
+		}
+
+		// Set name on the root only when it's a full inline schema. When it's a
+		// $ref (recursive types — the root is a ref to its own $defs entry),
+		// leaving name null prevents Swagger's auto-register from overwriting
+		// the $defs entry we already populated under the same name.
+		if (schema.get$ref() == null) {
+			schema.setName(fullName);
 		}
 
 		return schema;
