@@ -59,21 +59,21 @@ public class ProtobufModelConverter implements ModelConverter {
 
 		Schema<?> schema = convertMapToSchema(jsonSchema);
 		String fullName = descriptor.getFullName();
+		boolean rootIsRef = schema.get$ref() != null;
 
 		if (type.isResolveAsRef()) {
-			schema.setName(fullName);
-			context.defineModel(fullName, schema);
-			// Springwolf, springdoc and similar consumers read getName() on the
-			// returned $ref to rewrite it via RefUtils.constructRef(...). A null
-			// name yields #/components/schemas/null, so set it here.
-			return new Schema<>().name(fullName).$ref(COMPONENTS_SCHEMAS_REF + fullName);
+			if (!rootIsRef) {
+				schema.setName(fullName);
+				context.defineModel(fullName, schema);
+			}
+			// Nameless $ref is load-bearing: ModelConverterContextImpl.resolve()
+			// auto-registers the returned schema into modelByName[getName()] when
+			// the name is non-null. A named ref would overwrite the full schema
+			// with a self-referential ref. Matches swagger-core ModelResolver.
+			return new Schema<>().$ref(COMPONENTS_SCHEMAS_REF + fullName);
 		}
 
-		// Set name on the root only when it's a full inline schema. When it's a
-		// $ref (recursive types — root is a ref to its own $defs entry), leaving
-		// name null prevents Swagger's ModelConverterContextImpl.resolve() from
-		// auto-registering this $ref and overwriting the $defs entry.
-		if (schema.get$ref() == null) {
+		if (!rootIsRef) {
 			schema.setName(fullName);
 		}
 

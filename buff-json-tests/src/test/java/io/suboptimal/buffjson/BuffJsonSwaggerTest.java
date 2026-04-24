@@ -142,7 +142,7 @@ class BuffJsonSwaggerTest {
 	}
 
 	@Test
-	void resolveAsRefReturnsNamedRef() {
+	void resolveAsRefPreservesFullSchema() {
 		String fullName = "io.suboptimal.buffjson.proto.TestNesting";
 		ResolvedSchema resolved = converters
 				.resolveAsResolvedSchema(new AnnotatedType(TestNesting.class).resolveAsRef(true));
@@ -150,10 +150,38 @@ class BuffJsonSwaggerTest {
 		assertNotNull(resolved);
 		assertNotNull(resolved.schema);
 		assertEquals("#/components/schemas/" + fullName, resolved.schema.get$ref());
-		// The returned $ref must carry its name — Springwolf/springdoc read it
-		// via RefUtils.constructRef(schema.getName()) to build the component ref.
-		assertEquals(fullName, resolved.schema.getName(),
-				"$ref schema must carry its name or consumers produce #/components/schemas/null");
+		// Canonical Swagger pattern: returned $ref has no name, so
+		// ModelConverterContextImpl.resolve() doesn't auto-register it over the full
+		// schema.
+		assertNull(resolved.schema.getName(),
+				"returned $ref must be nameless to avoid clobbering the full schema in modelByName");
+
+		Schema registered = resolved.referencedSchemas.get(fullName);
+		assertNotNull(registered, "full schema must be registered under its full name");
+		assertType("object", registered);
+		assertNotNull(registered.getProperties(), "registered entry must be the real schema, not a self-ref");
+		assertFalse(registered.getProperties().isEmpty());
+		assertNull(registered.get$ref(), "registered entry must not be a $ref");
+		assertEquals(fullName, registered.getName());
+	}
+
+	@Test
+	void resolveAsRefRecursive() {
+		String fullName = "io.suboptimal.buffjson.proto.TestRecursive";
+		ResolvedSchema resolved = converters
+				.resolveAsResolvedSchema(new AnnotatedType(TestRecursive.class).resolveAsRef(true));
+
+		assertNotNull(resolved);
+		assertEquals("#/components/schemas/" + fullName, resolved.schema.get$ref());
+		assertNull(resolved.schema.getName());
+
+		// The $defs loop populated the real schema; recursive+resolveAsRef must not
+		// overwrite it with a ref-only map.
+		Schema registered = resolved.referencedSchemas.get(fullName);
+		assertNotNull(registered);
+		assertType("object", registered);
+		assertNull(registered.get$ref());
+		assertNotNull(registered.getProperties());
 	}
 
 	@Test
