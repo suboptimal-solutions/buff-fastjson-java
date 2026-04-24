@@ -30,6 +30,9 @@ import io.swagger.v3.oas.models.media.Schema;
  */
 public class ProtobufModelConverter implements ModelConverter {
 
+	private static final String COMPONENTS_SCHEMAS_REF = "#/components/schemas/";
+	private static final String DEFS_REF = "#/$defs/";
+
 	@Override
 	public Schema<?> resolve(AnnotatedType type, ModelConverterContext context, Iterator<ModelConverter> chain) {
 		Class<?> rawClass = rawClass(type.getType());
@@ -63,7 +66,7 @@ public class ProtobufModelConverter implements ModelConverter {
 			// Springwolf, springdoc and similar consumers read getName() on the
 			// returned $ref to rewrite it via RefUtils.constructRef(...). A null
 			// name yields #/components/schemas/null, so set it here.
-			return new Schema<>().name(fullName).$ref("#/components/schemas/" + fullName);
+			return new Schema<>().name(fullName).$ref(COMPONENTS_SCHEMAS_REF + fullName);
 		}
 
 		// Set name on the root only when it's a full inline schema. When it's a
@@ -132,10 +135,8 @@ public class ProtobufModelConverter implements ModelConverter {
 				}
 				case "$ref" -> {
 					String ref = (String) value;
-					// Rewrite from #/$defs/full.name to #/components/schemas/full.name
-					if (ref.startsWith("#/$defs/")) {
-						String fullName = ref.substring("#/$defs/".length());
-						schema.set$ref("#/components/schemas/" + fullName);
+					if (ref.startsWith(DEFS_REF)) {
+						schema.set$ref(COMPONENTS_SCHEMAS_REF + ref.substring(DEFS_REF.length()));
 					} else {
 						schema.set$ref(ref);
 					}
