@@ -384,6 +384,10 @@ class BuffJsonSwaggerTest {
 		assertNotNull(schema.getTypes(), "types must not be null");
 		assertTrue(schema.getTypes().contains(expected),
 				"expected type '" + expected + "' but got " + schema.getTypes());
+		// Singular type must also be populated — 3.0-style consumers (Springwolf's
+		// SwaggerSchemaMapper.assignType, some springdoc paths) read getType(), not
+		// getTypes().
+		assertEquals(expected, schema.getType(), "singular type must match for 3.0-style consumers");
 	}
 
 	private void assertJsonValidatesAgainstSchema(Message message) {
