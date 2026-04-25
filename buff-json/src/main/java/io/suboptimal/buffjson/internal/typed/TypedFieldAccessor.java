@@ -282,6 +282,91 @@ public sealed interface TypedFieldAccessor {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
+	record RepeatedIntAccessor(Function<Message, List<?>> listGetter, boolean unsigned,
+			FieldName name) implements TypedFieldAccessor {
+		@Override
+		public void write(JSONWriter jw, Message msg, ProtobufMessageWriter writer) {
+			List<Integer> values = (List<Integer>) (List<?>) listGetter.apply(msg);
+			if (values.isEmpty())
+				return;
+			name.writeTo(jw);
+			jw.startArray();
+			for (int i = 0; i < values.size(); i++) {
+				if (i > 0)
+					jw.writeComma();
+				if (unsigned)
+					jw.writeInt64(Integer.toUnsignedLong(values.get(i)));
+				else
+					jw.writeInt32(values.get(i));
+			}
+			jw.endArray();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	record RepeatedLongAccessor(Function<Message, List<?>> listGetter, boolean unsigned,
+			FieldName name) implements TypedFieldAccessor {
+		@Override
+		public void write(JSONWriter jw, Message msg, ProtobufMessageWriter writer) {
+			List<Long> values = (List<Long>) (List<?>) listGetter.apply(msg);
+			if (values.isEmpty())
+				return;
+			name.writeTo(jw);
+			jw.startArray();
+			for (int i = 0; i < values.size(); i++) {
+				if (i > 0)
+					jw.writeComma();
+				if (unsigned)
+					WellKnownTypes.writeUnsignedLongString(jw, values.get(i));
+				else
+					jw.writeString(values.get(i));
+			}
+			jw.endArray();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	record RepeatedStringAccessor(Function<Message, List<?>> listGetter, FieldName name) implements TypedFieldAccessor {
+		@Override
+		public void write(JSONWriter jw, Message msg, ProtobufMessageWriter writer) {
+			List<String> values = (List<String>) (List<?>) listGetter.apply(msg);
+			if (values.isEmpty())
+				return;
+			name.writeTo(jw);
+			jw.startArray();
+			for (int i = 0; i < values.size(); i++) {
+				if (i > 0)
+					jw.writeComma();
+				jw.writeString(values.get(i));
+			}
+			jw.endArray();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	record RepeatedMessageAccessor(Function<Message, List<?>> listGetter,
+			FieldName name) implements TypedFieldAccessor {
+		@Override
+		public void write(JSONWriter jw, Message msg, ProtobufMessageWriter writer) {
+			List<Message> values = (List<Message>) (List<?>) listGetter.apply(msg);
+			if (values.isEmpty())
+				return;
+			name.writeTo(jw);
+			jw.startArray();
+			for (int i = 0; i < values.size(); i++) {
+				if (i > 0)
+					jw.writeComma();
+				Message nested = values.get(i);
+				if (WellKnownTypes.isWellKnownType(nested.getDescriptorForType()))
+					WellKnownTypes.write(jw, nested, writer);
+				else
+					writer.writeMessage(jw, nested);
+			}
+			jw.endArray();
+		}
+	}
+
 	record RepeatedEnumAccessor(Function<Message, List<?>> valueListGetter, String[] names,
 			FieldName name) implements TypedFieldAccessor {
 		@Override
@@ -317,6 +402,27 @@ public sealed interface TypedFieldAccessor {
 				return;
 			name.writeTo(jw);
 			io.suboptimal.buffjson.internal.FieldWriter.writeMap(jw, mapValueDescriptor, entries, writer);
+		}
+	}
+
+	record TypedMapAccessor(Function<Message, java.util.Map<?, ?>> mapGetter, FieldDescriptor valueFd,
+			boolean stringKey, FieldName name) implements TypedFieldAccessor {
+		@Override
+		public void write(JSONWriter jw, Message msg, ProtobufMessageWriter writer) {
+			java.util.Map<?, ?> map = mapGetter.apply(msg);
+			if (map.isEmpty())
+				return;
+			name.writeTo(jw);
+			jw.startObject();
+			for (var entry : map.entrySet()) {
+				if (stringKey)
+					jw.writeName((String) entry.getKey());
+				else
+					jw.writeName(entry.getKey().toString());
+				jw.writeColon();
+				io.suboptimal.buffjson.internal.FieldWriter.writeValue(jw, valueFd, entry.getValue(), writer);
+			}
+			jw.endObject();
 		}
 	}
 }

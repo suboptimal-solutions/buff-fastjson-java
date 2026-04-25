@@ -190,18 +190,42 @@ public final class TypedFieldAccessorFactory {
 		}
 		String listGetterName = "get" + toCamelCase(fd.getName()) + "List";
 		var listGetter = (Function<Message, List<?>>) (Function<?, ?>) createObjectGetter(messageClass, listGetterName);
-		return new TypedFieldAccessor.RepeatedAccessor(listGetter, fd, name);
+		return switch (fd.getJavaType()) {
+			case INT -> new TypedFieldAccessor.RepeatedIntAccessor(listGetter, isUnsigned32(fd), name);
+			case LONG -> new TypedFieldAccessor.RepeatedLongAccessor(listGetter, isUnsigned64(fd), name);
+			case STRING -> new TypedFieldAccessor.RepeatedStringAccessor(listGetter, name);
+			case MESSAGE -> new TypedFieldAccessor.RepeatedMessageAccessor(listGetter, name);
+			default -> new TypedFieldAccessor.RepeatedAccessor(listGetter, fd, name);
+		};
 	}
 
 	// --- Map ---
-	// Tier 4a uses getField(fd) reflection for map entries — Tier 4b will add
-	// a typed map accessor backed by getXxxMap()/getXxxValueMap().
 
-	private static TypedFieldAccessor createMapAccessor(FieldDescriptor fd, Class<? extends Message> messageClass) {
+	@SuppressWarnings("unchecked")
+	private static TypedFieldAccessor createMapAccessor(FieldDescriptor fd, Class<? extends Message> messageClass)
+			throws Throwable {
 		FieldName name = fieldName(fd.getJsonName());
+		FieldDescriptor keyFd = fd.getMessageType().findFieldByName("key");
 		FieldDescriptor valueFd = fd.getMessageType().findFieldByName("value");
-		Function<Message, List<?>> entriesGetter = msg -> (List<?>) msg.getField(fd);
-		return new TypedFieldAccessor.MapAccessor(entriesGetter, valueFd, name);
+		boolean stringKey = keyFd.getJavaType() == FieldDescriptor.JavaType.STRING;
+
+		// Use typed map getter via LambdaMetafactory (avoids getField reflection).
+		// For enum-valued maps, use ValueMap() getter which returns Map<K, Integer>.
+		String mapGetterName;
+		if (valueFd.getJavaType() == FieldDescriptor.JavaType.ENUM) {
+			mapGetterName = "get" + toCamelCase(fd.getName()) + "ValueMap";
+		} else {
+			mapGetterName = "get" + toCamelCase(fd.getName()) + "Map";
+		}
+		try {
+			var mapGetter = (Function<Message, java.util.Map<?, ?>>) (Function<?, ?>) createObjectGetter(messageClass,
+					mapGetterName);
+			return new TypedFieldAccessor.TypedMapAccessor(mapGetter, valueFd, stringKey, name);
+		} catch (NoSuchMethodException e) {
+			// Fallback: use getField(fd) for unusual cases (custom protoc output)
+			Function<Message, List<?>> entriesGetter = msg -> (List<?>) msg.getField(fd);
+			return new TypedFieldAccessor.MapAccessor(entriesGetter, valueFd, name);
+		}
 	}
 
 	// --- LambdaMetafactory helpers ---
