@@ -12,6 +12,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Message;
 
+import io.suboptimal.buffjson.internal.FieldWriter;
 import io.suboptimal.buffjson.internal.ProtobufMessageWriter;
 import io.suboptimal.buffjson.internal.WellKnownTypes;
 
@@ -278,7 +279,7 @@ public sealed interface TypedFieldAccessor {
 			if (values.isEmpty())
 				return;
 			name.writeTo(jw);
-			io.suboptimal.buffjson.internal.FieldWriter.writeRepeated(jw, fd, values, writer);
+			FieldWriter.writeRepeated(jw, fd, values, writer);
 		}
 	}
 
@@ -401,7 +402,7 @@ public sealed interface TypedFieldAccessor {
 			if (entries.isEmpty())
 				return;
 			name.writeTo(jw);
-			io.suboptimal.buffjson.internal.FieldWriter.writeMap(jw, mapValueDescriptor, entries, writer);
+			FieldWriter.writeMap(jw, mapValueDescriptor, entries, writer);
 		}
 	}
 
@@ -420,7 +421,7 @@ public sealed interface TypedFieldAccessor {
 				else
 					jw.writeName(entry.getKey().toString());
 				jw.writeColon();
-				io.suboptimal.buffjson.internal.FieldWriter.writeValue(jw, valueFd, entry.getValue(), writer);
+				FieldWriter.writeValue(jw, valueFd, entry.getValue(), writer);
 			}
 			jw.endObject();
 		}
