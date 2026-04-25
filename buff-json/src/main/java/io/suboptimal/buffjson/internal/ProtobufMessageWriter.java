@@ -6,11 +6,13 @@ import java.util.List;
 import com.alibaba.fastjson2.JSONWriter;
 import com.alibaba.fastjson2.writer.ObjectWriter;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Message;
 import com.google.protobuf.TypeRegistry;
 
 import io.suboptimal.buffjson.BuffJsonCodecHolder;
 import io.suboptimal.buffjson.BuffJsonGeneratedEncoder;
+import io.suboptimal.buffjson.internal.typed.TypedMessageSchema;
 /**
  * Core serialization logic for protobuf messages. Implements fastjson2's
  * {@link ObjectWriter} to produce proto3-spec-compliant JSON.
@@ -80,6 +82,14 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 		if (useGenerated && message instanceof BuffJsonCodecHolder holder) {
 			((BuffJsonGeneratedEncoder<Message>) holder.buffJsonEncoder()).writeFields(jsonWriter, message, this);
 			return;
+		}
+
+		if (!(message instanceof DynamicMessage)) {
+			var typed = TypedMessageSchema.forMessage(message.getDescriptorForType(), message.getClass());
+			if (typed != null) {
+				typed.writeFields(jsonWriter, message, this);
+				return;
+			}
 		}
 
 		var schema = MessageSchema.forDescriptor(message.getDescriptorForType());
