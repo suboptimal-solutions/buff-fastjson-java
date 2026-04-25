@@ -5,6 +5,7 @@ Blazingly fast ⚡️ JSON serialization for Protocol Buffer messages in Java, c
 ## Performance
 
 Up to **~15x** faster than `JsonFormat.printer().print()` from `protobuf-java-util`.
+
 Up to **~7x** faster than `jackson.writeValueAsString()` from `jackson-datatype-protobuf`.
 
 Encode throughput, higher is better:
