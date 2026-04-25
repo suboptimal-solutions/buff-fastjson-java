@@ -4,6 +4,9 @@ Blazingly fast ⚡️ JSON serialization for Protocol Buffer messages in Java, c
 
 ## Performance
 
+Up to **~15x** faster than `JsonFormat.printer().print()` from `protobuf-java-util`.
+Up to **~7x** faster than `mapper.writeValueAsString()` with HubSpot's [`jackson-datatype-protobuf`](https://github.com/HubSpot/jackson-datatype-protobuf).
+
 Encode throughput, higher is better:
 
 |              Message type               | JsonFormat (ops/s) | Jackson (HubSpot) (ops/s) | BuffJson typed-runtime (ops/s) | BuffJson codegen (ops/s) | Codegen vs JsonFormat | Codegen vs Jackson |
@@ -11,7 +14,7 @@ Encode throughput, higher is better:
 | SimpleMessage (6 fields)                |              1.81M |                     2.72M |                         16.84M |                   19.51M |      **~10.8x**       |     **~7.2x**      |
 | ComplexMessage (nested, maps, repeated) |               138K |                      277K |                          1.41M |                    2.06M |      **~14.9x**       |     **~7.4x**      |
 
-Benchmarked on JDK 21 (Corretto) with JMH on Apple Silicon, single-fork × 3 iterations. Jackson here is [`com.hubspot.jackson:jackson-datatype-protobuf`](https://github.com/HubSpot/jackson-datatype-protobuf) — the most widely used Jackson protobuf module. Numbers vary by platform and JVM warm-up — see `./run-benchmarks.sh` to reproduce on your environment.
+Benchmarked on JDK 21 (Corretto) with JMH on Apple Silicon, single-fork × 3 iterations. Run `./run-benchmarks.sh` to reproduce on your environment.
 
 ## How it works
 
