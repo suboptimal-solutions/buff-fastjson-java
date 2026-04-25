@@ -30,12 +30,14 @@ public final class BuffJsonDecoder {
 
 	private TypeRegistry typeRegistry;
 	private boolean useGeneratedDecoders = true;
+	private volatile ProtobufMessageReader cachedReader;
 
 	BuffJsonDecoder() {
 	}
 
 	public BuffJsonDecoder setTypeRegistry(TypeRegistry registry) {
 		this.typeRegistry = registry;
+		this.cachedReader = null;
 		return this;
 	}
 
@@ -45,6 +47,7 @@ public final class BuffJsonDecoder {
 
 	public BuffJsonDecoder setGeneratedDecoders(boolean enabled) {
 		this.useGeneratedDecoders = enabled;
+		this.cachedReader = null;
 		return this;
 	}
 
@@ -133,6 +136,11 @@ public final class BuffJsonDecoder {
 	}
 
 	private ProtobufMessageReader messageReader() {
-		return new ProtobufMessageReader(typeRegistry, useGeneratedDecoders);
+		var r = cachedReader;
+		if (r == null) {
+			r = new ProtobufMessageReader(typeRegistry, useGeneratedDecoders);
+			cachedReader = r;
+		}
+		return r;
 	}
 }
