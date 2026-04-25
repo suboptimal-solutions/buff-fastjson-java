@@ -23,6 +23,20 @@ import io.suboptimal.buffjson.internal.ProtobufWriterModule;
  * encoder.encode(message, outputStream);
  * }</pre>
  *
+ * <h2>Thread-safety</h2>
+ *
+ * Once configured, an encoder is safe to share across threads:
+ * {@code encode}/{@code encodeToBytes} create a fresh {@link JSONWriter} per
+ * call, the cached {@link ProtobufMessageWriter} has only {@code final} fields,
+ * and the underlying schema caches are concurrent.
+ *
+ * <p>
+ * Mutating setters ({@link #setTypeRegistry}, {@link #setGeneratedEncoders},
+ * {@link #setTypedAccessors}) are <b>not</b> safe to call concurrently with
+ * {@code encode} — a setter racing with an in-flight encode can result in the
+ * cached writer holding a stale config. Configure the encoder once at startup,
+ * then share it.
+ *
  * @see BuffJson#encoder()
  */
 public final class BuffJsonEncoder {

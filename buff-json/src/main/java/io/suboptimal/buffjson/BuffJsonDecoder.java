@@ -24,6 +24,19 @@ import io.suboptimal.buffjson.internal.ProtobufReaderModule;
  * MyMessage msg = decoder.decode(inputStream, MyMessage.class);
  * }</pre>
  *
+ * <h2>Thread-safety</h2>
+ *
+ * Once configured, a decoder is safe to share across threads: each
+ * {@code decode} call creates a fresh {@link JSONReader}, the cached
+ * {@link ProtobufMessageReader} has only {@code final} fields, and the
+ * underlying schema caches are concurrent.
+ *
+ * <p>
+ * Mutating setters ({@link #setTypeRegistry}, {@link #setGeneratedDecoders})
+ * are <b>not</b> safe to call concurrently with {@code decode} — a setter
+ * racing with an in-flight decode can result in the cached reader holding a
+ * stale config. Configure the decoder once at startup, then share it.
+ *
  * @see BuffJson#decoder()
  */
 public final class BuffJsonDecoder {
