@@ -3,7 +3,6 @@ package io.suboptimal.buffjson;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayOutputStream;
-import java.lang.management.ManagementFactory;
 import java.lang.ref.WeakReference;
 
 import com.google.protobuf.ByteString;
@@ -15,26 +14,19 @@ import org.junit.jupiter.api.Test;
 import io.suboptimal.buffjson.proto.*;
 
 /**
- * Memory-leak guards. Two flavors:
+ * Reachability tests guarding against the encoder retaining references to
+ * encoded {@link Message} instances or to itself once results have been handed
+ * back to the caller. Uses {@link WeakReference} + {@link System#gc()}, which
+ * is deterministic enough for these checks given a few retry cycles.
  *
- * <ul>
- * <li><b>Reachability tests</b> — use {@link WeakReference} to verify that
- * encoder/decoder don't retain references after a call returns. These are
- * deterministic given enough GC cycles and reliable as long as the test JVM
- * isn't exotic.
- * <li><b>Steady-state heap tests</b> — run a tight loop and assert heap delta
- * stays under a generous threshold. These catch per-call allocation
- * accumulation (e.g., a forgotten JSONWriter close, a growing internal
- * collection). Inherently noisier; thresholds intentionally loose.
- * </ul>
+ * <p>
+ * For per-call <em>allocation rate</em> regression detection (a much stronger
+ * signal than a single-loop heap delta), see {@code allocation-check.sh} which
+ * runs JMH with {@code -prof gc} on a representative subset of benchmarks and
+ * asserts {@code gc.alloc.rate.norm} budgets. That script runs in CI as a
+ * separate job.
  */
 class BuffJsonMemoryTest {
-
-	private static final int WARMUP = 20_000;
-	private static final int LOOP_ITERATIONS = 200_000;
-
-	// Loose, intentional. JIT and minor GC can shift things by a few MB.
-	private static final long HEAP_GROWTH_BUDGET_BYTES = 10L * 1024 * 1024;
 
 	private static TestAllScalars sampleMessage() {
 		return TestAllScalars.newBuilder().setOptionalInt32(42).setOptionalInt64(123456789012345L).setOptionalUint32(7)
@@ -48,8 +40,6 @@ class BuffJsonMemoryTest {
 		return TestNesting.newBuilder().setNested(nested).addRepeatedNested(nested).addRepeatedNested(nested)
 				.setEnumValue(TestEnum.TEST_ENUM_FOO).addRepeatedEnum(TestEnum.TEST_ENUM_BAR).build();
 	}
-
-	// ---------- Reachability tests ----------
 
 	@Test
 	void encoderDoesNotRetainMessageReference() throws Exception {
@@ -148,72 +138,12 @@ class BuffJsonMemoryTest {
 		WeakReference<BuffJsonEncoder> encRef = new WeakReference<>(encoder);
 		encoder = null;
 
-		// The byte[] result must NOT keep the encoder alive
 		assertReclaimed(encRef, "Encoded byte[] keeps the encoder alive");
 		assertNotNull(bytes);
 	}
 
-	// ---------- Steady-state heap tests ----------
-
-	@Test
-	void codegenSteadyStateHeapBounded() throws Exception {
-		assertSteadyState(BuffJson.encoder(), sampleMessage(), "codegen");
-	}
-
-	@Test
-	void typedAccessorSteadyStateHeapBounded() throws Exception {
-		assertSteadyState(BuffJson.encoder().setGeneratedEncoders(false), sampleMessage(), "typed");
-	}
-
-	@Test
-	void reflectionSteadyStateHeapBounded() throws Exception {
-		assertSteadyState(BuffJson.encoder().setGeneratedEncoders(false).setTypedAccessors(false), sampleMessage(),
-				"reflection");
-	}
-
-	@Test
-	void utf8SteadyStateHeapBounded() throws Exception {
-		var encoder = BuffJson.encoder();
-		var message = sampleMessage();
-
-		for (int i = 0; i < WARMUP; i++)
-			encoder.encodeToBytes(message);
-
-		long before = usedHeapAfterGc();
-		for (int i = 0; i < LOOP_ITERATIONS; i++)
-			encoder.encodeToBytes(message);
-		long after = usedHeapAfterGc();
-
-		long delta = after - before;
-		assertTrue(delta <= HEAP_GROWTH_BUDGET_BYTES, "UTF-8 path heap grew by " + delta + " bytes over "
-				+ LOOP_ITERATIONS + " iterations (budget: " + HEAP_GROWTH_BUDGET_BYTES + ")");
-	}
-
-	@Test
-	void nestedSteadyStateHeapBounded() throws Exception {
-		assertSteadyState(BuffJson.encoder(), sampleNested(), "nested-codegen");
-	}
-
-	private static void assertSteadyState(BuffJsonEncoder encoder, Message message, String label) throws Exception {
-		for (int i = 0; i < WARMUP; i++)
-			encoder.encode(message);
-
-		long before = usedHeapAfterGc();
-		for (int i = 0; i < LOOP_ITERATIONS; i++)
-			encoder.encode(message);
-		long after = usedHeapAfterGc();
-
-		long delta = after - before;
-		assertTrue(delta <= HEAP_GROWTH_BUDGET_BYTES, label + " heap grew by " + delta + " bytes over "
-				+ LOOP_ITERATIONS + " iterations (budget: " + HEAP_GROWTH_BUDGET_BYTES + ")");
-	}
-
-	// ---------- Helpers ----------
-
 	private static void assertReclaimed(WeakReference<?> ref, String message) throws InterruptedException {
-		// System.gc() is a hint, not a guarantee. Loop with backoff to give the GC
-		// time to run. The reference object is small, so mark-sweep should reach
-		// it quickly once the strong reference is dropped.
+		// System.gc() is a hint; loop with backoff to give the GC time to run.
 		for (int i = 0; i < 10; i++) {
 			System.gc();
 			if (ref.get() == null)
@@ -221,13 +151,5 @@ class BuffJsonMemoryTest {
 			Thread.sleep(50);
 		}
 		fail(message);
-	}
-
-	private static long usedHeapAfterGc() throws InterruptedException {
-		for (int i = 0; i < 3; i++) {
-			System.gc();
-			Thread.sleep(50);
-		}
-		return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed();
 	}
 }

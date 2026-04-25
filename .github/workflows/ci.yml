@@ -21,3 +21,24 @@ jobs:
 
       - name: Build and test
         run: mvn verify -B
+
+  allocation-check:
+    # Asserts JMH gc.alloc.rate.norm budgets per benchmark — guards against
+    # regressions like a missed zero-alloc path or new String/byte[] allocations
+    # on the hot path. See allocation-check.sh.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: corretto
+          java-version: 21
+          cache: maven
+
+      - name: Build benchmark jar
+        run: mvn package -DskipTests -B
+
+      - name: Run allocation regression check
+        run: ./allocation-check.sh
