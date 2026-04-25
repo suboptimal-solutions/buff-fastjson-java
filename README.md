@@ -4,22 +4,22 @@ Blazingly fast ⚡️ JSON serialization for Protocol Buffer messages in Java, c
 
 ## Performance
 
-Up to ~10x faster than `JsonFormat.printer().print()` from protobuf-java-util.
+Encode throughput, higher is better:
+
+|              Message type               | JsonFormat (ops/s) | Jackson (HubSpot) (ops/s) | BuffJson typed-runtime (ops/s) | BuffJson codegen (ops/s) | Codegen vs JsonFormat | Codegen vs Jackson |
+|-----------------------------------------|-------------------:|--------------------------:|-------------------------------:|-------------------------:|:---------------------:|:------------------:|
+| SimpleMessage (6 fields)                |              1.81M |                     2.72M |                         16.84M |                   19.51M |      **~10.8x**       |     **~7.2x**      |
+| ComplexMessage (nested, maps, repeated) |               138K |                      277K |                          1.41M |                    2.06M |      **~14.9x**       |     **~7.4x**      |
+
+Benchmarked on JDK 21 (Corretto) with JMH on Apple Silicon, single-fork × 3 iterations. Jackson here is [`com.hubspot.jackson:jackson-datatype-protobuf`](https://github.com/HubSpot/jackson-datatype-protobuf) — the most widely used Jackson protobuf module. Numbers vary by platform and JVM warm-up — see `./run-benchmarks.sh` to reproduce on your environment.
+
+## How it works
 
 Three encoding paths, tried in order on every `encode()` call:
 
-1. **Codegen** (optional protoc plugin) — `*JsonEncoder` calls typed getters directly (`msg.getId()` returns `int`, no boxing).
-2. **Typed-accessor runtime** (always available) — `LambdaMetafactory`-bound `ToIntFunction<Message>` / `ToLongFunction<Message>` / `Function<Message, Object>` lambdas pointing at the protoc-generated typed getters. No reflection, no boxing. ~85% of codegen throughput.
-3. **Pure reflection** (fallback) — `MessageSchema` + `message.getField(fd)`. Exercised by `DynamicMessage` (e.g., `Any` unpacking).
-
-|              Message type               | JsonFormat (ops/s) | BuffJson typed-runtime (ops/s) | BuffJson codegen (ops/s) | Codegen vs JsonFormat |
-|-----------------------------------------|--------------------|--------------------------------|--------------------------|-----------------------|
-| SimpleMessage (6 fields)                | ~1.3M              | ~17M                           | ~22M                     | **~17x**              |
-| ComplexMessage (nested, maps, repeated) | ~142K              | ~1.5M                          | ~1.7M                    | **~12x**              |
-
-Benchmarked on JDK 21 (Corretto) with JMH on Apple Silicon. Numbers vary by platform and JVM warm-up — see `./run-benchmarks.sh` for your own environment.
-
-## How it works
+1. **Codegen** (optional protoc plugin) — generated `*JsonEncoder` calls typed getters directly (`msg.getId()` returns `int`, no boxing). Selected via `instanceof BuffJsonCodecHolder`, an interface injected into message classes through protoc insertion points.
+2. **Typed-accessor runtime** (always available) — `LambdaMetafactory`-bound `ToIntFunction<Message>` / `ToLongFunction<Message>` / `Function<Message, Object>` lambdas pointing at the protoc-generated typed getters. No reflection, no boxing. About 80–90% of codegen throughput. Used automatically when no protoc plugin is configured.
+3. **Pure reflection** (fallback) — cached `MessageSchema` + `message.getField(fd)`. Used for `DynamicMessage` (e.g., `Any` unpacking) and any class where `LambdaMetafactory` binding fails.
 
 Uses [Alibaba fastjson2](https://github.com/alibaba/fastjson2) as the JSON writing engine. The encoder creates a `JSONWriter` directly and calls `ProtobufMessageWriter.writeMessage()` — bypassing fastjson2's module dispatch and provider lookup. All JSON formatting (buffering, number encoding, string escaping) is delegated to fastjson2's optimized infrastructure.
 
