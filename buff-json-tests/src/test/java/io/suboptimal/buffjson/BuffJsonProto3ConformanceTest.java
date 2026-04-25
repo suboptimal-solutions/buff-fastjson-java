@@ -14,19 +14,25 @@ class BuffJsonProto3ConformanceTest {
 
 	private static final JsonFormat.Printer REFERENCE = JsonFormat.printer().omittingInsignificantWhitespace();
 	private static final BuffJsonEncoder CODEGEN_ENCODER = BuffJson.encoder().setGeneratedEncoders(true);
-	private static final BuffJsonEncoder RUNTIME_ENCODER = BuffJson.encoder().setGeneratedEncoders(false);
+	private static final BuffJsonEncoder TYPED_ENCODER = BuffJson.encoder().setGeneratedEncoders(false);
+	private static final BuffJsonEncoder REFLECTION_ENCODER = BuffJson.encoder().setGeneratedEncoders(false)
+			.setTypedAccessors(false);
 
 	private void assertMatchesReference(Message message) throws Exception {
 		String expected = REFERENCE.print(message);
 		String typeName = message.getDescriptorForType().getFullName();
 
-		// Test codegen path (uses generated encoders if available)
+		// Codegen path (BuffJsonCodecHolder fast path)
 		String codegen = CODEGEN_ENCODER.encode(message);
 		assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
 
-		// Test runtime path (reflection-based, no generated encoders)
-		String runtime = RUNTIME_ENCODER.encode(message);
-		assertEquals(expected, runtime, "Runtime mismatch for " + typeName);
+		// Typed-accessor path (LambdaMetafactory-bound getters, no codegen)
+		String typed = TYPED_ENCODER.encode(message);
+		assertEquals(expected, typed, "Typed-accessor mismatch for " + typeName);
+
+		// Pure-reflection path (MessageSchema + getField — also serves DynamicMessage)
+		String reflection = REFLECTION_ENCODER.encode(message);
+		assertEquals(expected, reflection, "Reflection mismatch for " + typeName);
 	}
 
 	// =========================================================================
@@ -679,18 +685,24 @@ class BuffJsonProto3ConformanceTest {
 		private static final JsonFormat.Printer ANY_REFERENCE = JsonFormat.printer().usingTypeRegistry(TYPE_REGISTRY)
 				.omittingInsignificantWhitespace();
 
-		private static final BuffJsonEncoder ENCODER = BuffJson.encoder().setTypeRegistry(TYPE_REGISTRY);
-		private static final BuffJsonEncoder RUNTIME_ANY_ENCODER = ENCODER.setGeneratedEncoders(false);
+		private static final BuffJsonEncoder CODEGEN_ANY_ENCODER = BuffJson.encoder().setTypeRegistry(TYPE_REGISTRY);
+		private static final BuffJsonEncoder TYPED_ANY_ENCODER = BuffJson.encoder().setTypeRegistry(TYPE_REGISTRY)
+				.setGeneratedEncoders(false);
+		private static final BuffJsonEncoder REFLECTION_ANY_ENCODER = BuffJson.encoder().setTypeRegistry(TYPE_REGISTRY)
+				.setGeneratedEncoders(false).setTypedAccessors(false);
 
 		private void assertAnyMatchesReference(Message message) throws Exception {
 			String expected = ANY_REFERENCE.print(message);
 			String typeName = message.getDescriptorForType().getFullName();
 
-			String codegen = ENCODER.encode(message);
+			String codegen = CODEGEN_ANY_ENCODER.encode(message);
 			assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
 
-			String runtime = RUNTIME_ANY_ENCODER.encode(message);
-			assertEquals(expected, runtime, "Runtime mismatch for " + typeName);
+			String typed = TYPED_ANY_ENCODER.encode(message);
+			assertEquals(expected, typed, "Typed-accessor mismatch for " + typeName);
+
+			String reflection = REFLECTION_ANY_ENCODER.encode(message);
+			assertEquals(expected, reflection, "Reflection mismatch for " + typeName);
 		}
 
 		@Test

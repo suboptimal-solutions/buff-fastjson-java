@@ -29,6 +29,7 @@ public final class BuffJsonEncoder {
 
 	private TypeRegistry typeRegistry;
 	private boolean useGeneratedEncoders = true;
+	private boolean useTypedAccessors = true;
 	private volatile ProtobufMessageWriter cachedWriter;
 
 	BuffJsonEncoder() {
@@ -52,6 +53,22 @@ public final class BuffJsonEncoder {
 
 	public boolean getGeneratedEncoders() {
 		return useGeneratedEncoders;
+	}
+
+	/**
+	 * Toggles the LambdaMetafactory-based typed-accessor runtime path. When false,
+	 * messages without a generated encoder fall through to the pure-reflection
+	 * {@code MessageSchema} + {@code getField} path. Intended for benchmarking and
+	 * test-suite path coverage; production code should leave this enabled.
+	 */
+	public BuffJsonEncoder setTypedAccessors(boolean enabled) {
+		this.useTypedAccessors = enabled;
+		this.cachedWriter = null;
+		return this;
+	}
+
+	public boolean getTypedAccessors() {
+		return useTypedAccessors;
 	}
 
 	/**
@@ -104,7 +121,7 @@ public final class BuffJsonEncoder {
 	private ProtobufMessageWriter messageWriter() {
 		var w = cachedWriter;
 		if (w == null) {
-			w = new ProtobufMessageWriter(typeRegistry, useGeneratedEncoders);
+			w = new ProtobufMessageWriter(typeRegistry, useGeneratedEncoders, useTypedAccessors);
 			cachedWriter = w;
 		}
 		return w;

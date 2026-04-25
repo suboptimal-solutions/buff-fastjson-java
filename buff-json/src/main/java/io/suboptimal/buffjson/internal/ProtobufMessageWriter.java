@@ -43,14 +43,20 @@ import io.suboptimal.buffjson.internal.typed.TypedMessageSchema;
  */
 public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
-	public static final ProtobufMessageWriter INSTANCE = new ProtobufMessageWriter(null, true);
+	public static final ProtobufMessageWriter INSTANCE = new ProtobufMessageWriter(null, true, true);
 
 	private final TypeRegistry typeRegistry;
 	private final boolean useGenerated;
+	private final boolean useTyped;
 
 	public ProtobufMessageWriter(TypeRegistry typeRegistry, boolean useGenerated) {
+		this(typeRegistry, useGenerated, true);
+	}
+
+	public ProtobufMessageWriter(TypeRegistry typeRegistry, boolean useGenerated, boolean useTyped) {
 		this.typeRegistry = typeRegistry;
 		this.useGenerated = useGenerated;
+		this.useTyped = useTyped;
 	}
 
 	public TypeRegistry typeRegistry() {
@@ -84,7 +90,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 			return;
 		}
 
-		if (!(message instanceof DynamicMessage)) {
+		if (useTyped && !(message instanceof DynamicMessage)) {
 			var typed = TypedMessageSchema.forMessage(message.getDescriptorForType(), message.getClass());
 			if (typed != null) {
 				typed.writeFields(jsonWriter, message, this);
