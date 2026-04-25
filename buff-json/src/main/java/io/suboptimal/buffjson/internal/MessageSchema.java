@@ -74,6 +74,7 @@ public final class MessageSchema {
 		private final FieldDescriptor descriptor;
 		private final String jsonName;
 		private final char[] nameWithColon;
+		private final byte[] nameWithColonUtf8;
 		private final FieldDescriptor.JavaType javaType;
 		private final boolean isRepeated;
 		private final boolean isMapField;
@@ -84,6 +85,7 @@ public final class MessageSchema {
 			this.descriptor = fd;
 			this.jsonName = fd.getJsonName();
 			this.nameWithColon = buildNameWithColon(this.jsonName);
+			this.nameWithColonUtf8 = buildNameWithColonUtf8(this.jsonName);
 			this.javaType = fd.getJavaType();
 			this.isRepeated = fd.isRepeated();
 			this.isMapField = fd.isMapField();
@@ -92,9 +94,9 @@ public final class MessageSchema {
 		}
 
 		/**
-		 * Pre-computes {@code "fieldName":} as a char array for use with
-		 * {@link com.alibaba.fastjson2.JSONWriter#writeNameRaw(char[])}. Works with
-		 * both UTF-8 and UTF-16 writers. Protobuf JSON field names are always ASCII.
+		 * Pre-computes {@code "fieldName":} as a char array for the UTF-16
+		 * {@link com.alibaba.fastjson2.JSONWriter#writeNameRaw(char[])} path. Protobuf
+		 * JSON field names are always ASCII.
 		 */
 		private static char[] buildNameWithColon(String name) {
 			char[] chars = new char[name.length() + 3];
@@ -103,6 +105,21 @@ public final class MessageSchema {
 			chars[name.length() + 1] = '"';
 			chars[name.length() + 2] = ':';
 			return chars;
+		}
+
+		/**
+		 * Pre-computes {@code "fieldName":} as a byte array for the UTF-8
+		 * {@link com.alibaba.fastjson2.JSONWriter#writeNameRaw(byte[])} path, avoiding
+		 * char→byte transcoding per field write. ASCII-only.
+		 */
+		private static byte[] buildNameWithColonUtf8(String name) {
+			byte[] bytes = new byte[name.length() + 3];
+			bytes[0] = '"';
+			for (int i = 0; i < name.length(); i++)
+				bytes[i + 1] = (byte) name.charAt(i);
+			bytes[name.length() + 1] = '"';
+			bytes[name.length() + 2] = ':';
+			return bytes;
 		}
 
 		public FieldDescriptor descriptor() {
@@ -115,6 +132,10 @@ public final class MessageSchema {
 
 		public char[] nameWithColon() {
 			return nameWithColon;
+		}
+
+		public byte[] nameWithColonUtf8() {
+			return nameWithColonUtf8;
 		}
 
 		public FieldDescriptor.JavaType javaType() {

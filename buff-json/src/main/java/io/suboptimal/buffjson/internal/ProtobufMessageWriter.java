@@ -94,6 +94,7 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
 		var schema = MessageSchema.forDescriptor(message.getDescriptorForType());
 		var fields = schema.fields();
+		boolean utf8 = jsonWriter.isUTF8();
 
 		for (var fieldInfo : fields) {
 			FieldDescriptor fd = fieldInfo.descriptor();
@@ -102,13 +103,13 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 				List<?> entries = (List<?>) message.getField(fd);
 				if (entries.isEmpty())
 					continue;
-				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
+				writeName(jsonWriter, fieldInfo, utf8);
 				FieldWriter.writeMap(jsonWriter, fieldInfo.mapValueDescriptor(), entries, this);
 			} else if (fieldInfo.isRepeated()) {
 				List<?> values = (List<?>) message.getField(fd);
 				if (values.isEmpty())
 					continue;
-				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
+				writeName(jsonWriter, fieldInfo, utf8);
 				FieldWriter.writeRepeated(jsonWriter, fd, values, this);
 			} else {
 				Object value = message.getField(fd);
@@ -118,10 +119,17 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 				} else if (isDefaultValue(fieldInfo, value)) {
 					continue;
 				}
-				jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
+				writeName(jsonWriter, fieldInfo, utf8);
 				FieldWriter.writeValue(jsonWriter, fd, value, this);
 			}
 		}
+	}
+
+	private static void writeName(JSONWriter jsonWriter, MessageSchema.FieldInfo fieldInfo, boolean utf8) {
+		if (utf8)
+			jsonWriter.writeNameRaw(fieldInfo.nameWithColonUtf8());
+		else
+			jsonWriter.writeNameRaw(fieldInfo.nameWithColon());
 	}
 
 	private static boolean isDefaultValue(MessageSchema.FieldInfo fieldInfo, Object value) {
