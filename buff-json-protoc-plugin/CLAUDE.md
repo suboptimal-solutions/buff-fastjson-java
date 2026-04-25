@@ -30,33 +30,34 @@ For each non-WKT, non-map-entry message type:
 
 1. A `FooJsonEncoder.java` class implementing `BuffJsonGeneratedEncoder<Foo>`
 2. A `public static final INSTANCE` singleton for direct calls from other encoders
-3. Pre-computed `char[] NAME_*` constants for each field (format: `"fieldName":`)
+3. Pre-computed name constants per field — both `char[] NAME_*` (UTF-16 path) and `byte[] NAME_*_BYTES` (UTF-8 path), populated from `nameChars(...)` / `nameBytes(...)` helpers at class init. ASCII-only.
 4. Pre-cached `String[] ENUM_*_NAMES` arrays for each enum type (built from enum descriptor at class init, avoiding `UNRECOGNIZED` which throws from `getNumber()`)
-5. A `writeFields(JSONWriter, T, ProtobufMessageWriter)` method with inlined per-field encoding logic
+5. A `writeFields(JSONWriter, T, ProtobufMessageWriter)` method with inlined per-field encoding logic, opening with `boolean utf8 = jsonWriter.isUTF8();` so each field-name write dispatches via `if (utf8) writeNameRaw(NAME_X_BYTES); else writeNameRaw(NAME_X);`
 6. A `message_implements` insertion point per message adding `BuffJsonCodecHolder` to the implements clause
 7. A `class_scope` insertion point per message adding `buffJsonEncoder()`/`buffJsonDecoder()` method implementations
 8. An `outer_class_scope` insertion point per proto file with a `static {}` block that registers proto source comments via reflection into `GeneratedCommentRegistry` (only when `buff-json-schema` is on the classpath)
 
 ## Field Handling
 
-|         Category         |                                     Generated pattern                                      |
-|--------------------------|--------------------------------------------------------------------------------------------|
-| Scalar (no presence)     | `int v = msg.getId(); if (v != 0) { writeNameRaw; writeInt32(v); }`                        |
-| Scalar (optional)        | `if (msg.hasId()) { writeNameRaw; writeInt32(msg.getId()); }`                              |
-| uint32/fixed32           | `writeInt64(Integer.toUnsignedLong(...))`                                                  |
-| int64 variants           | `writeString((long) ...)` — no String allocation                                           |
-| uint64/fixed64           | `WellKnownTypes.writeUnsignedLongString(jsonWriter, ...)` — no String allocation           |
-| float/double             | Inline NaN/Infinity check                                                                  |
-| Enum                     | Static `ENUM_*_NAMES` array lookup by `msg.getStatusValue()` (no `forNumber()`)            |
-| bytes                    | `jsonWriter.writeBase64(v.toByteArray())` — fastjson2 encodes directly into buffer         |
-| Repeated                 | `msg.getFooList()`, check isEmpty, iterate                                                 |
-| Map (String key)         | `msg.getFooMap()`, iterate, `entry.getKey()` directly (no `toString()`)                    |
-| Map (non-String key)     | `msg.getFooMap()`, iterate, `entry.getKey().toString()`                                    |
-| Oneof                    | `switch (msg.getFooCase())` with per-case typed accessor                                   |
-| Nested message (non-WKT) | `FooJsonEncoder.INSTANCE.writeFields(jw, nested, writer)` — direct call, bypasses registry |
-| Nested message (WKT)     | `WellKnownTypes.write(jsonWriter, nested, writer)`                                         |
-| Timestamp                | `WellKnownTypes.writeTimestampDirect(jsonWriter, ts.getSeconds(), ts.getNanos())`          |
-| Duration                 | `WellKnownTypes.writeDurationDirect(jsonWriter, dur.getSeconds(), dur.getNanos())`         |
+|         Category         |                                      Generated pattern                                      |
+|--------------------------|---------------------------------------------------------------------------------------------|
+| Scalar (no presence)     | `int v = msg.getId(); if (v != 0) { emitWriteName; writeInt32(v); }`                        |
+| Scalar (optional)        | `if (msg.hasId()) { emitWriteName; writeInt32(msg.getId()); }`                              |
+| uint32/fixed32           | `writeInt64(Integer.toUnsignedLong(...))`                                                   |
+| int64 variants           | `writeString(...)` — no `Long.toString()` allocation, fastjson2 unboxes                     |
+| uint64/fixed64           | `WellKnownTypes.writeUnsignedLongString(jsonWriter, ...)` — no String allocation            |
+| float/double             | Inline NaN/Infinity check, `isFinite()` first (hot path)                                    |
+| Enum                     | Static `ENUM_*_NAMES` array lookup by `msg.getStatusValue()` (no `forNumber()`)             |
+| bytes                    | `jsonWriter.writeBase64(v.toByteArray())` — fastjson2 encodes directly into buffer          |
+| Field name               | `if (utf8) writeNameRaw(NAME_X_BYTES); else writeNameRaw(NAME_X);` — JIT-specialized branch |
+| Repeated                 | `msg.getFooList()`, check isEmpty, iterate                                                  |
+| Map (String key)         | `msg.getFooMap()`, iterate, `entry.getKey()` directly (no `toString()`)                     |
+| Map (non-String key)     | `msg.getFooMap()`, iterate, `entry.getKey().toString()`                                     |
+| Oneof                    | `switch (msg.getFooCase())` with per-case typed accessor                                    |
+| Nested message (non-WKT) | `FooJsonEncoder.INSTANCE.writeFields(jw, nested, writer)` — direct call, bypasses registry  |
+| Nested message (WKT)     | `WellKnownTypes.write(jsonWriter, nested, writer)`                                          |
+| Timestamp                | `WellKnownTypes.writeTimestampDirect(jsonWriter, ts.getSeconds(), ts.getNanos())`           |
+| Duration                 | `WellKnownTypes.writeDurationDirect(jsonWriter, dur.getSeconds(), dur.getNanos())`          |
 
 ## Name Resolution
 
@@ -71,7 +72,7 @@ For each non-WKT, non-map-entry message type:
 - **`google.protobuf.Empty`** is NOT in the WKT set — it serializes as a regular empty message `{}`
 - **`DynamicMessage`** cannot use generated encoders (would fail cast) — guarded in `ProtobufMessageWriter`
 - **Map entry types** (`options.map_entry = true`) are skipped — they're synthetic
-- **`writeNameRaw(char[])`** must be used (not `byte[]`) — `JSONWriterUTF16.writeNameRaw(byte[])` throws `UnsupportedOperation`
+- **`writeNameRaw(byte[])` throws `UnsupportedOperation` on `JSONWriterUTF16`** — generated code emits both `NAME_X` (char[]) and `NAME_X_BYTES` (byte[]) and dispatches on `boolean utf8 = jsonWriter.isUTF8()` hoisted at the top of `writeFields`. Helper: `EncoderGenerator.emitWriteName(sb, constName, indent)`.
 - **Enum `UNRECOGNIZED`** — protobuf's generated `UNRECOGNIZED` constant throws `IllegalArgumentException` from `getNumber()`. Enum name arrays use `EnumDescriptor.getValues()` (not Java `.values()`) to avoid this
 - **Cross-file nested encoder calls** — `protoToEncoderClass` only contains messages from `filesToGenerate`. If a nested message is defined in a non-generated file, the fallback to `writer.writeMessage(jsonWriter, nested)` is used (which still finds the encoder at runtime via `instanceof BuffJsonCodecHolder`)
 - **Insertion point file paths** — for `java_multiple_files = true`, message insertion points target `package/MessageName.java`; for `false`, they target `package/OuterClassName.java`. The `outer_class_scope` insertion point always targets the outer class file

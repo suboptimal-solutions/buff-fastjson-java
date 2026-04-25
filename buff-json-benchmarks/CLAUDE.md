@@ -5,29 +5,31 @@
 JMH benchmarks comparing `BuffJson.encode()` against `JsonFormat.printer().print()`.
 Owns its own .proto definitions for benchmark messages.
 
-## Benchmarks — Three-Way Comparison
+## Benchmarks — Comparison Matrix
 
-Each benchmark class has up to 6 methods (constant + random variants × 3 encoders):
+`SimpleMessageBenchmark` and `DoubleHeavyBenchmark` are split into UTF-16 (`encode` → String) and UTF-8 (`encodeToBytes` → byte[]) variants per encoder, since the UTF-8 byte[] field-name pre-encoding (Tier 5) and `JSONWriterUTF8` differ enough to be worth measuring independently:
 
-- `buffJsonCodegen()` / `buffJsonCodegenRandom()` — codegen path
-- `buffJson()` / `buffJsonRandom()` — runtime path (with `setGeneratedEncoders(false)`)
-- `protoJsonFormat()` / `protoJsonFormatRandom()` — `JsonFormat.printer().print()` (baseline)
+- `compiledUtf16()` / `compiledUtf8()` — codegen path
+- `runtimeUtf16()` / `runtimeUtf8()` — typed-accessor runtime (`setGeneratedEncoders(false)`)
+- `fastjson2PojoUtf16()` / `fastjson2PojoUtf8()` — fastjson2 POJO baseline (where applicable)
+- `protoJsonFormat()` — `JsonFormat.printer().print()` baseline (UTF-16 only)
 
-Random variants use a 1024-element message pool (`index++ & MASK` cycling).
+Older benchmarks (`ComplexMessageBenchmark`, `WktBenchmark`, etc.) still use `buffJsonCompiled` / `buffJsonRuntime` / `protoJsonFormat` naming. Random variants use a 1024-element message pool (`index++ & MASK` cycling).
 
 ## Benchmark Classes
 
-|              Class              |                             Message                             |          Focus          |
-|---------------------------------|-----------------------------------------------------------------|-------------------------|
-| `SimpleMessageBenchmark`        | 6-field flat message (string, int32, int64, double, bool, enum) | Scalar baseline         |
-| `ComplexMessageBenchmark`       | Nested, maps, repeated, oneof, bytes, timestamps, enum          | Full-featured message   |
-| `AllScalarsBenchmark`           | All 15 proto3 scalar types + enum                               | Type coverage           |
-| `WktBenchmark`                  | Timestamp, Duration, Wrappers, Struct (4 sub-scenarios)         | Well-known types        |
-| `AnyBenchmark`                  | Any containing scalars message + Any containing Timestamp       | Type resolution         |
-| `RepeatedAndMapBenchmark`       | 100+ repeated elements, 50+ map entries                         | Collection stress       |
-| `DeepNestingAndStringBenchmark` | 5-level recursive nesting + unicode/escape strings              | Nesting + string stress |
-| `SimpleMessagePojoBenchmark`    | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison      |
-| `ComplexMessagePojoBenchmark`   | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison      |
+|              Class              |                             Message                             |                    Focus                    |
+|---------------------------------|-----------------------------------------------------------------|---------------------------------------------|
+| `SimpleMessageBenchmark`        | 6-field flat message (string, int32, int64, double, bool, enum) | Scalar baseline (UTF-16/UTF-8 split)        |
+| `DoubleHeavyBenchmark`          | 25-double IoT/telemetry profile + POJO baseline                 | Number-formatting cost (UTF-16/UTF-8 split) |
+| `ComplexMessageBenchmark`       | Nested, maps, repeated, oneof, bytes, timestamps, enum          | Full-featured message                       |
+| `AllScalarsBenchmark`           | All 15 proto3 scalar types + enum                               | Type coverage                               |
+| `WktBenchmark`                  | Timestamp, Duration, Wrappers, Struct (4 sub-scenarios)         | Well-known types                            |
+| `AnyBenchmark`                  | Any containing scalars message + Any containing Timestamp       | Type resolution                             |
+| `RepeatedAndMapBenchmark`       | 100+ repeated elements, 50+ map entries                         | Collection stress                           |
+| `DeepNestingAndStringBenchmark` | 5-level recursive nesting + unicode/escape strings              | Nesting + string stress                     |
+| `SimpleMessagePojoBenchmark`    | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison                          |
+| `ComplexMessagePojoBenchmark`   | Plain POJO equivalent via fastjson2 (generic + @JSONCompiled)   | Ceiling comparison                          |
 
 ## Running Benchmarks
 
@@ -47,11 +49,15 @@ Random variants use a 1024-element message pool (`index++ & MASK` cycling).
 - `benchmark-reports/<timestamp>-results.json` — machine-readable JSON
 - `benchmark-reports/<timestamp>-report.md` — markdown report with codegen/runtime/JsonFormat comparison table
 
+## Allocation Regression Check
+
+`./allocation-check.sh` (at repo root) runs JMH `-prof gc` on a representative subset of benchmarks (SimpleMessage codegen+runtime × UTF-16+UTF-8, ComplexMessage codegen+runtime, DoubleHeavy codegen × UTF-16+UTF-8) and asserts `gc.alloc.rate.norm` (B/op) stays within per-benchmark budgets. Total runtime ~1 minute; `--quick` flag for local iteration. Wired into CI as a separate `allocation-check` job. Catches missed zero-alloc paths and new String/byte[] allocations on the hot path.
+
 ## Proto Files
 
 - `simple_message.proto` — SimpleMessage + Status enum
 - `complex_message.proto` — Address, Tag, ComplexMessage (nested, maps, repeated, oneof, bytes, timestamps)
-- `benchmark_stress.proto` — BenchAllScalars, BenchRepeatedHeavy, BenchMapHeavy, BenchDeepNesting, BenchStringHeavy, BenchAny
+- `benchmark_stress.proto` — BenchAllScalars, BenchRepeatedHeavy, BenchMapHeavy, BenchDeepNesting, BenchDoubleHeavy (25 doubles), BenchStringHeavy, BenchAny
 - `benchmark_wkt.proto` — BenchTimestamps, BenchDurations, BenchWrappers, BenchStruct
 
 ## POJO Baselines

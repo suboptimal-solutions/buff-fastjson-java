@@ -6,34 +6,40 @@ Blazingly fast ⚡️ JSON serialization for Protocol Buffer messages in Java, c
 
 Up to ~10x faster than `JsonFormat.printer().print()` from protobuf-java-util.
 
-The optional protoc plugin generates message-specific encoders that use typed accessors directly (no reflection, no boxing), providing an additional ~2x over the runtime path:
+Three encoding paths, tried in order on every `encode()` call:
 
-|              Message type               | JsonFormat (ops/s) | BuffJson runtime (ops/s) | BuffJson codegen (ops/s) | Codegen vs JsonFormat |
-|-----------------------------------------|--------------------|--------------------------|--------------------------|-----------------------|
-| SimpleMessage (6 fields)                | ~1.3M              | ~5M                      | ~12M                     | **~9x**               |
-| ComplexMessage (nested, maps, repeated) | ~142K              | ~771K                    | ~1.5M                    | **~10x**              |
+1. **Codegen** (optional protoc plugin) — `*JsonEncoder` calls typed getters directly (`msg.getId()` returns `int`, no boxing).
+2. **Typed-accessor runtime** (always available) — `LambdaMetafactory`-bound `ToIntFunction<Message>` / `ToLongFunction<Message>` / `Function<Message, Object>` lambdas pointing at the protoc-generated typed getters. No reflection, no boxing. ~85% of codegen throughput.
+3. **Pure reflection** (fallback) — `MessageSchema` + `message.getField(fd)`. Exercised by `DynamicMessage` (e.g., `Any` unpacking).
 
-Benchmarked on JDK 21 (Corretto) with JMH.
+|              Message type               | JsonFormat (ops/s) | BuffJson typed-runtime (ops/s) | BuffJson codegen (ops/s) | Codegen vs JsonFormat |
+|-----------------------------------------|--------------------|--------------------------------|--------------------------|-----------------------|
+| SimpleMessage (6 fields)                | ~1.3M              | ~17M                           | ~22M                     | **~17x**              |
+| ComplexMessage (nested, maps, repeated) | ~142K              | ~1.5M                          | ~1.7M                    | **~12x**              |
+
+Benchmarked on JDK 21 (Corretto) with JMH on Apple Silicon. Numbers vary by platform and JVM warm-up — see `./run-benchmarks.sh` for your own environment.
 
 ## How it works
 
 Uses [Alibaba fastjson2](https://github.com/alibaba/fastjson2) as the JSON writing engine. The encoder creates a `JSONWriter` directly and calls `ProtobufMessageWriter.writeMessage()` — bypassing fastjson2's module dispatch and provider lookup. All JSON formatting (buffering, number encoding, string escaping) is delegated to fastjson2's optimized infrastructure.
 
-**Runtime path** (works with any message, no build changes):
-- **No `getAllFields()` / TreeMap allocation** per call (unlike `JsonFormat`)
-- **No Gson dependency** for string escaping (unlike `JsonFormat`)
-- **Cached `MessageSchema`** per message Descriptor (one-time cost)
-- **Pre-computed field name chars** for `writeNameRaw()` — avoids per-field string encoding
-- **Zero-allocation timestamps** — epoch→calendar conversion via integer arithmetic (Howard Hinnant's civil calendar algorithm), exact-size byte buffers (no `Arrays.copyOf`)
-- **fastjson2 striped buffer reuse** eliminates per-call allocations
-
-**Codegen path** (optional protoc plugin, ~2-3x additional speedup):
+**Codegen path** (optional protoc plugin):
 - **Direct typed accessors** — `message.getId()` returns `int`, no boxing
 - **No runtime type dispatch** — each field's encoding logic is inlined at compile time
 - **No schema cache lookup** — field iteration order and names are hardcoded
-- **Direct nested encoder calls** — nested messages call `INSTANCE.writeFields()` directly, bypassing the runtime registry
+- **Direct nested encoder calls** — nested messages call `INSTANCE.writeFields()` directly
 - **Inline WKT Timestamp/Duration** — typed accessor calls (`ts.getSeconds()`, `ts.getNanos()`) bypass descriptor lookup and reflection
 - **Pre-cached enum names** — static `String[]` array lookup, no `forNumber()` or descriptor calls
+- **Zero-alloc int64/bytes** — `writeString((long) v)`, `writeBase64(v.toByteArray())` — no intermediate String
+- **Pre-encoded UTF-8 byte[] field names** — `if (utf8) writeNameRaw(byte[]); else writeNameRaw(char[]);` per field, JIT-specialized
+
+**Typed-accessor runtime** (default fallback):
+- **No `getAllFields()` / TreeMap allocation** per call
+- **No `getField()` reflection** — `LambdaMetafactory` binds typed lambdas once per Descriptor, cached
+- **Specialized repeated/map accessors** — `RepeatedInt/Long/String/Message`, `TypedMap` eliminate per-element type-dispatch switch
+- **Same UTF-8 byte[] field name pre-encoding** as codegen, via `MessageSchema.FieldInfo.nameWithColonUtf8`
+- **Zero-allocation timestamps** — epoch→calendar conversion via integer arithmetic (Howard Hinnant's civil calendar algorithm), exact-size byte buffers
+- **fastjson2 striped buffer reuse** eliminates per-call buffer allocations
 
 Inspired by [fastjson2](https://github.com/alibaba/fastjson2) and [buffa](https://github.com/anthropics/buffa).
 
@@ -273,7 +279,16 @@ Reports are written to `benchmark-reports/` with raw output, JSON data, and mark
 mvn test
 ```
 
-366 tests compare `BuffJson.encode()` output against `JsonFormat.printer().omittingInsignificantWhitespace().print()` for all supported proto3 JSON features. The Jackson module adds additional tests covering conformance, POJO/record integration, tree model interop, and cross-library roundtrips.
+The conformance suite parameterizes every test case over **all three encoding paths** (codegen, typed-accessor, pure reflection) and compares output against `JsonFormat.printer().omittingInsignificantWhitespace().print()`. Reachability tests in `BuffJsonMemoryTest` confirm the encoder doesn't retain `Message` references after a call returns. The Jackson module adds tests covering POJO/record integration, tree model interop, and cross-library roundtrips.
+
+For allocation-rate regression detection, run:
+
+```bash
+./allocation-check.sh           # full check (~1 minute)
+./allocation-check.sh --quick   # faster, less stable iterations
+```
+
+This runs JMH `-prof gc` on a representative subset and asserts `gc.alloc.rate.norm` (B/op) stays within per-benchmark budgets defined in the script. Wired into CI as a separate `allocation-check` job alongside `mvn verify`.
 
 ## Project Structure
 

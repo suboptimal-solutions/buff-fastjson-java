@@ -3,11 +3,14 @@
 ## Module Purpose
 
 Conformance tests verifying that `BuffJson.encode()` produces output identical to
-`JsonFormat.printer().omittingInsignificantWhitespace().print()` for all proto3 JSON features.
+`JsonFormat.printer().omittingInsignificantWhitespace().print()` for all proto3 JSON
+features, across all three encoding paths (codegen, typed-accessor runtime,
+pure reflection).
 
 ## Test Structure
 
-- `BuffJsonReferenceTest.java` — 3 smoke tests (scalar, default, complex messages)
+- `BuffJsonReferenceTest.java` — 5 smoke tests (scalar, default, complex, plus two `DynamicMessage` tests on UTF-16 and UTF-8 paths — `DynamicMessage` is the only thing that exclusively exercises pure reflection in production)
+- `BuffJsonMemoryTest.java` — 8 reachability tests using `WeakReference` + `System.gc()` to confirm the encoder doesn't retain `Message` references after `encode`/`encodeToBytes`/`encode(stream)` on any of the three paths, including `DynamicMessage`. Steady-state allocation regressions are caught separately by `./allocation-check.sh` in CI (JMH `-prof gc`).
 - `BuffJsonProto3ConformanceTest.java` — 81 tests in 16 nested classes:
   - ScalarTypes (13): all types, boundaries, NaN, Infinity, -0.0, unicode, escapes, bytes
   - RepeatedFields (3): all scalar types, empty, single element
@@ -28,17 +31,21 @@ Conformance tests verifying that `BuffJson.encode()` produces output identical t
 
 ## Test Pattern
 
-Every `assertMatchesReference()` validates **both paths** (codegen and runtime):
+Every `assertMatchesReference()` validates **all three paths** (codegen, typed-accessor, pure reflection) against the `JsonFormat.printer()` reference:
 
 ```java
+private static final BuffJsonEncoder CODEGEN_ENCODER    = BuffJson.encoder().setGeneratedEncoders(true);
+private static final BuffJsonEncoder TYPED_ENCODER      = BuffJson.encoder().setGeneratedEncoders(false);
+private static final BuffJsonEncoder REFLECTION_ENCODER = BuffJson.encoder().setGeneratedEncoders(false)
+                                                                  .setTypedAccessors(false);
+
 String expected = JsonFormat.printer().omittingInsignificantWhitespace().print(message);
-String codegen = CODEGEN_ENCODER.encode(message);                  // uses generated encoders
-String runtime = RUNTIME_ENCODER.encode(message);                  // setGeneratedEncoders(false)
-assertEquals(expected, codegen, "Codegen mismatch for " + type);
-assertEquals(expected, runtime, "Runtime mismatch for " + type);
+assertEquals(expected, CODEGEN_ENCODER.encode(message),    "Codegen mismatch for " + type);
+assertEquals(expected, TYPED_ENCODER.encode(message),      "Typed-accessor mismatch for " + type);
+assertEquals(expected, REFLECTION_ENCODER.encode(message), "Reflection mismatch for " + type);
 ```
 
-Any tests use the same dual-path pattern with `BuffJsonEncoder.setTypeRegistry()`.
+`AnyTests` uses three independent encoders configured with `TypeRegistry` (don't reuse one builder — `setGeneratedEncoders` returns `this` and mutates state, so chaining off a shared instance aliases configurations).
 
 ## Protoc Plugin Integration
 

@@ -19,27 +19,42 @@ import io.suboptimal.buffjson.internal.typed.TypedMessageSchema;
  *
  * <p>
  * Holds settings as instance fields ({@code typeRegistry},
- * {@code useGenerated}) and passes {@code this} through the call chain — no
- * ThreadLocals.
+ * {@code useGenerated}, {@code useTyped}) and passes {@code this} through the
+ * call chain — no ThreadLocals.
  *
- * <p>
- * For each message:
+ * <h2>Three-tier dispatch in {@link #writeFields}</h2>
+ *
+ * For each message, paths are tried in order:
  *
  * <ol>
- * <li>Checks {@code message instanceof BuffJsonCodecHolder} for a generated
- * encoder (injected via protoc insertion points)
- * <li>If found: delegates to the generated encoder's
- * {@code writeFields(jw, msg, writer)} — direct typed accessors, no reflection
- * <li>If not: falls back to the runtime path — looks up the cached
- * {@link MessageSchema}, iterates pre-computed {@link MessageSchema.FieldInfo}
- * array (no {@code getAllFields()} TreeMap allocation), skips default values,
- * delegates value writing to {@link FieldWriter}
+ * <li><b>Codegen</b> — if {@code useGenerated && message instanceof
+ * BuffJsonCodecHolder}, delegates to the generated
+ * {@code BuffJsonGeneratedEncoder} (injected via protoc insertion points).
+ * Direct typed accessors, no reflection or boxing. Highest throughput.
+ * <li><b>Typed-accessor runtime</b> — if {@code useTyped} and the message is
+ * not a {@code DynamicMessage}, builds (or reuses) a {@link TypedMessageSchema}
+ * that holds {@code LambdaMetafactory}-bound typed lambdas for each field's
+ * getter. No {@code getField()} reflection, no boxing. About 80–90% of codegen
+ * throughput; activates automatically for any concrete generated message class
+ * even without the protoc plugin.
+ * <li><b>Pure reflection</b> — looks up the cached {@link MessageSchema},
+ * iterates pre-computed {@link MessageSchema.FieldInfo} array (no
+ * {@code getAllFields()} TreeMap allocation), pulls each value via
+ * {@code message.getField(fd)} (boxes primitives), skips defaults, dispatches
+ * to {@link FieldWriter}. Used for {@code DynamicMessage} (e.g., {@code Any}
+ * unpacking) and any class where {@code LambdaMetafactory} binding fails — also
+ * reachable in tests via {@code setTypedAccessors(false)}.
  * </ol>
  *
  * <p>
+ * Field-name writes in tiers 1 and 3 dispatch on {@code jsonWriter.isUTF8()} —
+ * UTF-8 writers consume pre-encoded {@code byte[]} (no char→byte transcoding),
+ * UTF-16 writers consume {@code char[]}. Tier 2 dispatches inside
+ * {@link io.suboptimal.buffjson.internal.typed.FieldName#writeTo}.
+ *
+ * <p>
  * Default value detection uses raw bit comparison for float/double (to
- * correctly handle {@code
- * -0.0}).
+ * correctly handle {@code -0.0}).
  */
 public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
@@ -80,8 +95,8 @@ public final class ProtobufMessageWriter implements ObjectWriter<Message> {
 
 	/**
 	 * Writes all non-default fields of a message without the surrounding braces.
-	 * Uses a generated encoder if the message implements
-	 * {@link BuffJsonCodecHolder}.
+	 * Tries the three dispatch tiers in order: codegen (codec-holder), typed
+	 * accessors (LambdaMetafactory), pure reflection. See the class Javadoc.
 	 */
 	@SuppressWarnings("unchecked")
 	void writeFields(JSONWriter jsonWriter, Message message) {
