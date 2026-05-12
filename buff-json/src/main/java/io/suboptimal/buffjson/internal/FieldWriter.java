@@ -6,7 +6,6 @@ import com.alibaba.fastjson2.JSONWriter;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 
 /**
@@ -162,15 +161,23 @@ public final class FieldWriter {
 	 * Writes a map field as a JSON object. Map keys are always stringified in
 	 * proto3 JSON (including numeric and boolean keys). Empty maps should be
 	 * skipped by the caller.
+	 *
+	 * <p>
+	 * Entries are treated as generic {@link Message} instances via
+	 * {@code getField()} — works uniformly for both compiled {@link MapEntry} and
+	 * {@link com.google.protobuf.DynamicMessage} map entries.
 	 */
 	public static void writeMap(JSONWriter jsonWriter, FieldDescriptor valueDescriptor, List<?> entries,
 			ProtobufMessageWriter writer) {
+		var entryDesc = valueDescriptor.getContainingType();
+		var keyFd = entryDesc.findFieldByName("key");
+		var valueFd = entryDesc.findFieldByName("value");
 		jsonWriter.startObject();
 		for (Object entry : entries) {
-			MapEntry<?, ?> mapEntry = (MapEntry<?, ?>) entry;
-			jsonWriter.writeName(mapEntry.getKey().toString());
+			Message entryMsg = (Message) entry;
+			jsonWriter.writeName(entryMsg.getField(keyFd).toString());
 			jsonWriter.writeColon();
-			writeValue(jsonWriter, valueDescriptor, mapEntry.getValue(), writer);
+			writeValue(jsonWriter, valueFd, entryMsg.getField(valueFd), writer);
 		}
 		jsonWriter.endObject();
 	}

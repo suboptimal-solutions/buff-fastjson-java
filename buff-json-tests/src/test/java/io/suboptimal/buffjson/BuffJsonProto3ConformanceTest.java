@@ -2,6 +2,9 @@ package io.suboptimal.buffjson;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+
 import com.google.protobuf.*;
 import com.google.protobuf.util.JsonFormat;
 
@@ -22,17 +25,25 @@ class BuffJsonProto3ConformanceTest {
 		String expected = REFERENCE.print(message);
 		String typeName = message.getDescriptorForType().getFullName();
 
-		// Codegen path (BuffJsonCodecHolder fast path)
-		String codegen = CODEGEN_ENCODER.encode(message);
-		assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
+		// UTF-16 path (encode → String)
+		assertEquals(expected, CODEGEN_ENCODER.encode(message), "Codegen mismatch for " + typeName);
+		assertEquals(expected, TYPED_ENCODER.encode(message), "Typed-accessor mismatch for " + typeName);
+		assertEquals(expected, REFLECTION_ENCODER.encode(message), "Reflection mismatch for " + typeName);
 
-		// Typed-accessor path (LambdaMetafactory-bound getters, no codegen)
-		String typed = TYPED_ENCODER.encode(message);
-		assertEquals(expected, typed, "Typed-accessor mismatch for " + typeName);
+		// UTF-8 path (encodeToBytes → byte[])
+		assertEquals(expected, new String(CODEGEN_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+				"Codegen UTF-8 mismatch for " + typeName);
+		assertEquals(expected, new String(TYPED_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+				"Typed-accessor UTF-8 mismatch for " + typeName);
+		assertEquals(expected, new String(REFLECTION_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+				"Reflection UTF-8 mismatch for " + typeName);
 
-		// Pure-reflection path (MessageSchema + getField — also serves DynamicMessage)
-		String reflection = REFLECTION_ENCODER.encode(message);
-		assertEquals(expected, reflection, "Reflection mismatch for " + typeName);
+		// OutputStream path (encode to OutputStream — uses same UTF-8 writer, verifies
+		// flushTo)
+		var out = new ByteArrayOutputStream();
+		REFLECTION_ENCODER.encode(message, out);
+		assertEquals(expected, out.toString(StandardCharsets.UTF_8),
+				"Reflection OutputStream mismatch for " + typeName);
 	}
 
 	// =========================================================================
@@ -695,14 +706,24 @@ class BuffJsonProto3ConformanceTest {
 			String expected = ANY_REFERENCE.print(message);
 			String typeName = message.getDescriptorForType().getFullName();
 
-			String codegen = CODEGEN_ANY_ENCODER.encode(message);
-			assertEquals(expected, codegen, "Codegen mismatch for " + typeName);
+			// UTF-16 path
+			assertEquals(expected, CODEGEN_ANY_ENCODER.encode(message), "Codegen mismatch for " + typeName);
+			assertEquals(expected, TYPED_ANY_ENCODER.encode(message), "Typed-accessor mismatch for " + typeName);
+			assertEquals(expected, REFLECTION_ANY_ENCODER.encode(message), "Reflection mismatch for " + typeName);
 
-			String typed = TYPED_ANY_ENCODER.encode(message);
-			assertEquals(expected, typed, "Typed-accessor mismatch for " + typeName);
+			// UTF-8 path
+			assertEquals(expected, new String(CODEGEN_ANY_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+					"Codegen UTF-8 mismatch for " + typeName);
+			assertEquals(expected, new String(TYPED_ANY_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+					"Typed-accessor UTF-8 mismatch for " + typeName);
+			assertEquals(expected, new String(REFLECTION_ANY_ENCODER.encodeToBytes(message), StandardCharsets.UTF_8),
+					"Reflection UTF-8 mismatch for " + typeName);
 
-			String reflection = REFLECTION_ANY_ENCODER.encode(message);
-			assertEquals(expected, reflection, "Reflection mismatch for " + typeName);
+			// OutputStream path
+			var out = new ByteArrayOutputStream();
+			REFLECTION_ANY_ENCODER.encode(message, out);
+			assertEquals(expected, out.toString(StandardCharsets.UTF_8),
+					"Reflection OutputStream mismatch for " + typeName);
 		}
 
 		@Test
